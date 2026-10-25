@@ -1,0 +1,8 @@
+.git/
+.deps/
+build/
+dist/
+sce_sys/snd0.at9
+*.o
+*.bin
+*.elf
