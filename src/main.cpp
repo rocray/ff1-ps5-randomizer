@@ -87,7 +87,7 @@ void draw_button_footer(Canvas &canvas) noexcept
     canvas.circle(448, 1019, 14, Color::white);
     canvas.text(474, 1008, "BACK", 4, Color::white);
 
-    canvas.text(1110, 1008, "MENU + MUSIC / TEST 04", 3, Color::steel);
+    canvas.text(1110, 1008, "MENU + MUSIC / TEST 05", 3, Color::steel);
 }
 
 void draw_title(Canvas &canvas) noexcept
@@ -172,7 +172,7 @@ void draw_frame(Canvas &canvas, const Input &input) noexcept
                 }
                 else
                 {
-                    open_message("LOAD FAILED", nes ? nes->error : "OUT OF MEMORY");
+                    open_message(nes && nes->core_message[0] ? "CORE LOAD FAILED" : "ROM LOAD FAILED", nes ? nes->error : "OUT OF MEMORY");
                 }
                 break;
             case 1:

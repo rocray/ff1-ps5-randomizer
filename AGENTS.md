@@ -104,3 +104,11 @@
 - Test04 validation: native compile/link, mapped-section regression and SELF integrity PASS.
   Host audio test checks repeated PCM wrapping across output grains and output-error handling.
   Hardware playback still pending. Existing NES host tests passed in Test03.
+
+## Test05 — error text visibility
+- User confirms Test04 menu music plays; PLAY fails with only an exclamation mark.
+- Renderer had uppercase glyphs only and silently replaced lowercase with blanks.
+  Fold ASCII lowercase for all text so emulator diagnostics and ROM paths render.
+- Preserve preformatted FCEUD_PrintError strings directly through its %s callback.
+- Distinguish CORE LOAD FAILED from ROM LOAD FAILED; marker TEST05.
+- This is a diagnostic correction, not a confirmed emulator loading fix.

@@ -12,7 +12,15 @@ static retro_game_info_ext game_info{};
 static void core_log(enum retro_log_level level,const char *fmt,...) {
     if(!current || level<RETRO_LOG_WARN || current->core_message[0]) return;
     va_list args;va_start(args,fmt);
-    std::vsnprintf(current->core_message,sizeof(current->core_message),fmt,args);
+    // FCEUD_PrintError passes an already-formatted string through "%s".
+    // Preserve it directly instead of formatting it a second time in the shim.
+    if(std::strcmp(fmt,"%s")==0) {
+        const char *message=va_arg(args,const char *);
+        std::size_t i=0;
+        if(message) for(;i+1<sizeof(current->core_message) && message[i];++i)
+            current->core_message[i]=message[i];
+        current->core_message[i]=0;
+    } else std::vsnprintf(current->core_message,sizeof(current->core_message),fmt,args);
     va_end(args);
     for(char *p=current->core_message;*p;p++) if(*p=='\n'||*p=='\r') *p=' ';
 }
