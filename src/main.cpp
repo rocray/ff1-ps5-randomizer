@@ -7,17 +7,20 @@
  */
 
 #include "demo_renderer.hpp"
+#include "title_music.hpp"
 #include "nes/nes_core.hpp"
 
 #include <cstdint>
 #include <new>
 #include <cstdio>
+#include <cstring>
 
 namespace
 {
 using ps5::demo::Canvas;
 using ps5::demo::Color;
 using ps5::demo::Input;
+namespace music = ps5::demo::music;
 using ps5::demo::nes::NesState;
 
 constexpr unsigned screen_width = 1920;
@@ -38,14 +41,15 @@ enum class Screen
 
 Screen screen = Screen::menu;
 unsigned selection = 0;
+bool music_enabled = true;
 const char *message_title = "";
 const char *message_line = "";
 
 constexpr const char *menu_items[4] = {
     "PLAY FF1",
     "CONTINUE RUN",
-    "SEED LIBRARY",
-    "SETTINGS",
+    "TITLE MUSIC",
+    "CONTROLS",
 };
 
 void open_message(const char *title, const char *line) noexcept
@@ -53,6 +57,19 @@ void open_message(const char *title, const char *line) noexcept
     message_title = title;
     message_line = line;
     screen = Screen::message;
+}
+
+bool load_available_rom() {
+    if(!nes || !scaled_game) return false;
+    const char *paths[]={"/app0/rom/FF1.NES","/app0/assets/FF1.NES",
+        "/data/homebrew/PPSA01987/rom/FF1.NES",
+        "/data/homebrew/PPSA01987/assets/FF1.NES"};
+    for(const char *path:paths){
+        if(ps5::demo::nes::load_rom(*nes,path)) return true;
+        // A readable but rejected ROM must not be masked by a missing fallback.
+        if(std::strcmp(nes->error,"ROM OPEN FAILED")!=0) return false;
+    }
+    return false;
 }
 
 void draw_panel(Canvas &canvas, unsigned x, unsigned y, unsigned width, unsigned height) noexcept
@@ -70,8 +87,7 @@ void draw_button_footer(Canvas &canvas) noexcept
     canvas.circle(448, 1019, 14, Color::white);
     canvas.text(474, 1008, "BACK", 4, Color::white);
 
-    canvas.triangle(770, 1004, 15, 28, Color::white);
-    canvas.text(796, 1008, "SEED", 4, Color::white);
+    canvas.text(1110, 1008, "MENU + MUSIC / TEST 04", 3, Color::steel);
 }
 
 void draw_title(Canvas &canvas) noexcept
@@ -100,31 +116,38 @@ void draw_menu(Canvas &canvas) noexcept
     }
 
     draw_panel(canvas, 880, 300, 900, 400);
-    canvas.text_centered(1330, 330, "NEW ADVENTURE", 5, Color::gold);
-    canvas.rectangle(1135, 376, 390, 3, Color::border);
-
-    canvas.text(930, 410, "PROTOTYPE: ORIGINAL ROM", 4, Color::white);
-    canvas.text(930, 452, "SEED GENERATOR: PENDING", 4, Color::white);
-    canvas.text(930, 494, "PARTY: FIGHTER / THIEF /", 4, Color::white);
-    canvas.text(930, 536, "      WHITE MAGE / BLACK MAGE", 4, Color::white);
-    canvas.text(930, 578, "ROM: assets/FF1.NES", 4, Color::steel);
-
-    const Color button_border = selection == 0 ? Color::highlight : Color::border;
-    canvas.rectangle(980, 606, 700, 64, button_border);
-    canvas.rectangle(984, 610, 692, 56, Color::navy_deep);
-    canvas.text_centered(1330, 624, "LOAD & PLAY", 5, Color::white);
+    const char *headings[]={"BEGIN YOUR ADVENTURE","RETURN TO YOUR PARTY","THE PRELUDE","CONTROLLER GUIDE"};
+    canvas.text_centered(1330, 330, headings[selection], 4, Color::gold);
+    canvas.rectangle(1010, 376, 640, 3, Color::border);
+    const char *lines[4][4]={
+        {"PLAY YOUR FF1 NES ROM", "A NEW RUN RESTARTS THE GAME", "LIVE TIMER AND ITEM TRACKER", "ROM: rom/FF1.NES"},
+        {"RESUME YOUR CURRENT SESSION", "RETURN FROM THE MENU", "WITHOUT RESTARTING THE GAME", ""},
+        {"LOOPING TITLE MUSIC", "PRESS X TO TOGGLE ON / OFF", "MUSIC PAUSES DURING GAMEPLAY", music::status()},
+        {"X / O: NES A / B", "OPTIONS / TOUCH: START / SELECT", "L1: CLOCK   R1: PAUSE", "TRIANGLE: SAVE AND MENU"}
+    };
+    for(unsigned i=0;i<4;i++)
+        canvas.text(930,415+i*44,lines[selection][i],3,Color::white);
+    canvas.rectangle(980,606,700,64,Color::border);
+    canvas.rectangle(984,610,692,56,Color::navy_deep);
+    const char *actions[]={"PLAY FF1",nes && nes->loaded?"CONTINUE RUN":"NO ACTIVE RUN",
+        music_enabled?"MUSIC: ON":"MUSIC: OFF","READY TO PLAY"};
+    canvas.text_centered(1330,624,actions[selection],4,Color::white);
 }
 
 void draw_message(Canvas &canvas) noexcept
 {
     draw_panel(canvas, 460, 420, 1000, 240);
     canvas.text_centered(960, 456, message_title, 5, Color::gold);
-    canvas.text_centered(960, 530, message_line, 4, Color::white);
+    std::string_view detail(message_line);
+    for(unsigned row=0;row<3 && row*48<detail.size();row++)
+        canvas.text(490,520+row*24,detail.substr(row*48,48),3,Color::white);
     canvas.text_centered(960, 604, "PRESS (O) BACK", 4, Color::steel);
 }
 
 void draw_frame(Canvas &canvas, const Input &input) noexcept
 {
+    music::start();
+    music::set_active(music_enabled && screen != Screen::gameplay);
     if (screen != Screen::gameplay && background != nullptr)
         canvas.image(0, 0, screen_width, screen_height, background);
     else
@@ -143,9 +166,7 @@ void draw_frame(Canvas &canvas, const Input &input) noexcept
             switch (selection)
             {
             case 0:
-                if (nes && scaled_game && (ps5::demo::nes::load_rom(*nes, "/app0/rom/FF1.NES") ||
-                    ps5::demo::nes::load_rom(*nes, "/app0/assets/FF1.NES") ||
-                    ps5::demo::nes::load_rom(*nes, "/data/homebrew/PPSA01987/assets/FF1.NES")))
+                if (load_available_rom())
                 {
                     screen = Screen::gameplay;
                 }
@@ -159,10 +180,9 @@ void draw_frame(Canvas &canvas, const Input &input) noexcept
                 else open_message("NO ACTIVE RUN", "SELECT PLAY FF1 FIRST");
                 break;
             case 2:
-                open_message("SEED LIBRARY", "COMING SOON");
+                music_enabled = !music_enabled;
                 break;
             default:
-                open_message("SETTINGS", "COMING SOON");
                 break;
             }
         }
@@ -210,6 +230,7 @@ void draw_frame(Canvas &canvas, const Input &input) noexcept
         }
     }
 
+    music::set_active(music_enabled && screen != Screen::gameplay);
     if(screen != Screen::gameplay) draw_button_footer(canvas);
 }
 } // namespace

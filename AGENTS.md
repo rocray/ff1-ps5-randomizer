@@ -81,3 +81,26 @@
 - Host FF1 boot/video test passes with core-facing /app0/rom/FF1.NES absent on host,
   confirming memory loading. Added callback pointer/size/lifetime contract checks.
 - Native relink, segment mapping checks, and SELF integrity pass; console test pending.
+
+## Gameplay Test03 — low-level ROM I/O and useful errors
+- User confirmed ROM exists at /data/homebrew/PPSA01987/rom/FF1.NES, 256KiB.
+- Test02 still failed; clean install displayed ROM NOT FOUND. Prior fallback logic
+  could overwrite a genuine core-load failure with a missing-file error.
+- Only try another path when open fails; include the absolute rom/ fallback.
+- Use open/lseek/read/close, matching working renderer asset I/O, instead of stdio.
+- Provide core log callback and display first warning/error on load failure.
+- Visible TEST03 menu marker distinguishes uploaded builds. Hardware test pending.
+
+## Menu/music Test04 — 2026-10-26
+- User requests cleaner menu and supplied Prelude music; retains Test03 ROM diagnostics.
+- Menu now has Play, Continue, Title Music toggle and Controls; removed inactive
+  seed/settings entries and inaccurate fixed party description. Seed generation remains pending.
+- Added dedicated native AudioOut thread, 48kHz signed-16 stereo PCM streaming,
+  exact end-of-file looping, menu-only playback, and visible audio failure status.
+- API reference: ps5-payload-dev/SDL release-2.30.x-ps5 audio backend.
+- Convert local music: ffmpeg -i prelude.mp3 -ar 48000 -ac 2 -f s16le assets/prelude.pcm
+- Music/ROM remain private assets; preserve tested SELF runtime and existing snd0.at9.
+- Native build and mapping validation required; menu music hardware test pending.
+- Test04 validation: native compile/link, mapped-section regression and SELF integrity PASS.
+  Host audio test checks repeated PCM wrapping across output grains and output-error handling.
+  Hardware playback still pending. Existing NES host tests passed in Test03.

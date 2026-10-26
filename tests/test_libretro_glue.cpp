@@ -24,6 +24,12 @@ int main(){
  assert(env(RETRO_ENVIRONMENT_GET_GAME_INFO_EXT,&info));
  assert(info && info->data==rom && info->size==sizeof(rom));
  assert(info->persistent_data && !info->file_in_archive && !std::strcmp(info->ext,"nes"));
+ retro_log_callback logging{};
+ assert(env(RETRO_ENVIRONMENT_GET_LOG_INTERFACE,&logging));
+ logging.log(RETRO_LOG_INFO,"normal startup");assert(!s.core_message[0]);
+ logging.log(RETRO_LOG_WARN,"load error %d\n",7);
+ logging.log(RETRO_LOG_ERROR,"generic failure");
+ assert(!std::strcmp(s.core_message,"load error 7 "));
  for(auto format:{RETRO_PIXEL_FORMAT_0RGB1555,RETRO_PIXEL_FORMAT_RGB565,RETRO_PIXEL_FORMAT_XRGB8888}){
   assert(env(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT,&format));
   unsigned char data[24]{};unsigned red=format==RETRO_PIXEL_FORMAT_XRGB8888?0xff0000:format==RETRO_PIXEL_FORMAT_RGB565?0xf800:0x7c00;

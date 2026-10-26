@@ -6,6 +6,7 @@
 #include <new>
 
 extern "C" unsigned char ff1_read_cpu(unsigned);
+extern "C" { int open(const char *, int, ...); long read(int, void *, std::size_t); long lseek(int, long, int); int close(int); }
 namespace ps5::demo::nes {
 static NesState *owner=nullptr; // libretro is a single-instance API
 void save_ram(NesState &s) {
@@ -32,20 +33,26 @@ bool load_rom(NesState &s,std::string_view path) {
     char filename[1024];
     if(path.size()>=sizeof(filename)){s.error="ROM PATH TOO LONG";return false;}
     std::memcpy(filename,path.data(),path.size());filename[path.size()]=0;
-    FILE *f=std::fopen(filename,"rb");
-    if(!f){s.error="ROM NOT FOUND";return false;}
-    if(std::fseek(f,0,SEEK_END)!=0){std::fclose(f);s.error="ROM READ FAILED";return false;}
-    long size=std::ftell(f);std::rewind(f);
-    if(size<16 || size>8*1024*1024){std::fclose(f);s.error="INVALID ROM SIZE";return false;}
+    // Use the same low-level file API as the working background asset loader.
+    const int fd=open(filename,0);
+    if(fd<0){s.error="ROM OPEN FAILED";return false;}
+    const long size=lseek(fd,0,SEEK_END);
+    if(size<16 || size>8*1024*1024){close(fd);s.error="INVALID ROM SIZE / SEEK";return false;}
+    if(lseek(fd,0,SEEK_SET)<0){close(fd);s.error="ROM SEEK FAILED";return false;}
     s.rom=new(std::nothrow) std::uint8_t[size];
     s.framebuffer=new(std::nothrow) std::uint32_t[256*240]{};
     bool ok=s.rom && s.framebuffer;
-    if(ok)ok=std::fread(s.rom,1,size,f)==static_cast<std::size_t>(size);
-    std::fclose(f);
+    std::size_t offset=0;
+    while(ok && offset<static_cast<std::size_t>(size)){
+        const long n=read(fd,s.rom+offset,static_cast<std::size_t>(size)-offset);
+        if(n<=0){ok=false;break;} offset+=static_cast<std::size_t>(n);
+    }
+    close(fd);
+    FILE *f=nullptr;
     if(!ok || std::memcmp(s.rom,"NES\x1a",4)!=0){unload_rom(s);s.error="INVALID OR UNREADABLE NES ROM";return false;}
-    s.rom_size=static_cast<std::size_t>(size);init_core_glue(&s);retro_init();
+    s.core_message[0]=0;s.rom_size=static_cast<std::size_t>(size);init_core_glue(&s);retro_init();
     retro_game_info info{filename,s.rom,s.rom_size,nullptr};
-    if(!retro_load_game(&info)){retro_deinit();unload_rom(s);s.error="CORE REJECTED ROM";return false;}
+    if(!retro_load_game(&info)){retro_deinit();unload_rom(s);s.error=s.core_message[0]?s.core_message:"CORE REJECTED ROM (NO DETAIL)";return false;}
     owner=&s;s.loaded=s.running=true;s.timer_armed=false;s.frames=0;s.buttons=0;s.error="";
     tracker_reset(&s.tracker);
     retro_system_av_info av{};retro_get_system_av_info(&av);s.fps=av.timing.fps>1?av.timing.fps:60.0988;

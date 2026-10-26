@@ -14,6 +14,7 @@ struct NesState {
     std::uint32_t buttons=0;
     Tracker tracker{};
     const char *error="";
+    char core_message[160]{};
     unsigned frames=0;
     const char *save_path="/download0/ff1.srm";
 };

@@ -3,12 +3,23 @@
 #include "nes_core.hpp"
 #include "../demo_renderer.hpp"
 #include <cstring>
+#include <cstdarg>
+#include <cstdio>
 namespace ps5::demo::nes {
 static NesState *current=nullptr;
 static retro_pixel_format format=RETRO_PIXEL_FORMAT_0RGB1555;
 static retro_game_info_ext game_info{};
+static void core_log(enum retro_log_level level,const char *fmt,...) {
+    if(!current || level<RETRO_LOG_WARN || current->core_message[0]) return;
+    va_list args;va_start(args,fmt);
+    std::vsnprintf(current->core_message,sizeof(current->core_message),fmt,args);
+    va_end(args);
+    for(char *p=current->core_message;*p;p++) if(*p=='\n'||*p=='\r') *p=' ';
+}
 static bool environment(unsigned cmd,void *data) {
     switch(cmd) {
+    case RETRO_ENVIRONMENT_GET_LOG_INTERFACE:
+        static_cast<retro_log_callback*>(data)->log=core_log;return true;
     case RETRO_ENVIRONMENT_GET_GAME_INFO_EXT:
         if(!current || !current->rom || !current->rom_size) return false;
         // This FCEUmm revision consumes memory content only through info_ext.
