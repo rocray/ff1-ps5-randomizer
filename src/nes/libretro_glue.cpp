@@ -6,8 +6,23 @@
 namespace ps5::demo::nes {
 static NesState *current=nullptr;
 static retro_pixel_format format=RETRO_PIXEL_FORMAT_0RGB1555;
+static retro_game_info_ext game_info{};
 static bool environment(unsigned cmd,void *data) {
     switch(cmd) {
+    case RETRO_ENVIRONMENT_GET_GAME_INFO_EXT:
+        if(!current || !current->rom || !current->rom_size) return false;
+        // This FCEUmm revision consumes memory content only through info_ext.
+        // The frontend owns these bytes until retro_unload_game has completed.
+        game_info = {};
+        game_info.full_path = "/app0/rom/FF1.NES";
+        game_info.dir = "/app0/rom";
+        game_info.name = "FF1";
+        game_info.ext = "nes";
+        game_info.data = current->rom;
+        game_info.size = current->rom_size;
+        game_info.persistent_data = true;
+        *static_cast<const retro_game_info_ext **>(data) = &game_info;
+        return true;
     case RETRO_ENVIRONMENT_SET_PIXEL_FORMAT:
         if (*static_cast<retro_pixel_format*>(data)>RETRO_PIXEL_FORMAT_RGB565) return false;
         format=*static_cast<retro_pixel_format*>(data); return true;

@@ -18,6 +18,12 @@ void retro_set_input_state(retro_input_state_t cb){input=cb;}
 }
 int main(){
  using namespace ps5::demo;nes::NesState s;std::uint32_t pixels[256*240]{};s.framebuffer=pixels;nes::init_core_glue(&s);
+ const retro_game_info_ext *info=nullptr;
+ assert(!env(RETRO_ENVIRONMENT_GET_GAME_INFO_EXT,&info));
+ std::uint8_t rom[16]={'N','E','S',0x1a};s.rom=rom;s.rom_size=sizeof(rom);
+ assert(env(RETRO_ENVIRONMENT_GET_GAME_INFO_EXT,&info));
+ assert(info && info->data==rom && info->size==sizeof(rom));
+ assert(info->persistent_data && !info->file_in_archive && !std::strcmp(info->ext,"nes"));
  for(auto format:{RETRO_PIXEL_FORMAT_0RGB1555,RETRO_PIXEL_FORMAT_RGB565,RETRO_PIXEL_FORMAT_XRGB8888}){
   assert(env(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT,&format));
   unsigned char data[24]{};unsigned red=format==RETRO_PIXEL_FORMAT_XRGB8888?0xff0000:format==RETRO_PIXEL_FORMAT_RGB565?0xf800:0x7c00;

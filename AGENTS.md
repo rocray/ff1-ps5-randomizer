@@ -71,3 +71,13 @@
 - Host tests pass: ROM boot/video, controls, pause/timer, SRAM, pixel formats/pitch,
   item history, and 5 tooling tests. Full lint/GoogleTest suite not run this session.
 - Pending: user hardware test of PLAY FF1. Do not label gameplay working yet.
+
+## Gameplay Test02 — ROM memory handoff
+- Test01 opens on PS5, but PLAY FF1 reports CORE REJECTED ROM (user result).
+- Pinned FCEUmm only consumes in-memory content via GET_GAME_INFO_EXT; its ordinary
+  retro_game_info fallback copies the filename and reopens through libretro VFS.
+- Added persistent extended content info exposing the already-read ROM buffer.
+  This avoids that second filesystem path. Buffer lives until unload completes.
+- Host FF1 boot/video test passes with core-facing /app0/rom/FF1.NES absent on host,
+  confirming memory loading. Added callback pointer/size/lifetime contract checks.
+- Native relink, segment mapping checks, and SELF integrity pass; console test pending.
