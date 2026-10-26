@@ -22,6 +22,9 @@ for command in python3 sha256sum; do
     }
 done
 bash "$root/tools/setup-native-dependencies.sh" >/dev/null
+bash "$root/tools/build-fceumm.sh"
+APP_INCLUDE_PATHS="${APP_INCLUDE_PATHS:-} vendor/fceumm/src/drivers/libretro/libretro-common/include"
+APP_STATIC_ARCHIVES="${APP_STATIC_ARCHIVES:-} vendor/fceumm/fceumm-ps5.a"
 
 param="$root/sce_sys/param.json"
 title_id=$(python3 - "$param" <<'PY'

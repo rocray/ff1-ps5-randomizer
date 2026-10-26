@@ -6,3 +6,7 @@ sce_sys/snd0.at9
 *.o
 *.bin
 *.elf
+
+/vendor/fceumm/
+*.srm
+*.tmp

@@ -8,6 +8,7 @@
 
 {
     local:
+        sync;
         _Zn*;
         _Zd*;
 };
