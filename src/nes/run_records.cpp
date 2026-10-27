@@ -20,3 +20,4 @@ bool save_records(const char *path,std::uint64_t rom,const double *v){
  while(offset<sizeof(r)){auto n=write(fd,reinterpret_cast<const char*>(&r)+offset,sizeof(r)-offset);if(n<=0)break;offset+=n;}
  const bool ok=offset==sizeof(r)&&fsync(fd)==0;close(fd);return ok;
 }
+

@@ -24,3 +24,4 @@ inline bool record_milestone(RunProgress &r,unsigned i,double seconds) {
 }
 bool load_records(const char *path,std::uint64_t rom,double values[SPLIT_COUNT]);
 bool save_records(const char *path,std::uint64_t rom,const double values[SPLIT_COUNT]);
+

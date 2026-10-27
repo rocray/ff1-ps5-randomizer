@@ -31,3 +31,4 @@ int main(int argc,char **argv) {
     items[0]=1;tracker_sample(&t,items);assert(t.count==1);
     std::remove(s.save_path);puts("PASS: real FF1 boot/video, input submission, pause, timer, SRAM reload, item history");
 }
+

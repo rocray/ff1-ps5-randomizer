@@ -10,6 +10,7 @@
 #include "demo_renderer.hpp"
 
 #include <array>
+#include <cstring>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -117,6 +118,9 @@ constexpr unsigned frame_width = 1920;
 constexpr unsigned frame_height = 1080;
 constexpr std::size_t frame_bytes = 0x1000000;
 constexpr std::size_t memory_bytes = frame_bytes * 2;
+// Canvas retains the proven tile layout, but random writes now hit cached RAM.
+constexpr std::size_t tiled_bytes = ((frame_width+127)/128)*((frame_height+127)/128)*65536;
+alignas(64) std::uint32_t staging[tiled_bytes/4];
 constexpr std::size_t memory_alignment = 0x200000;
 constexpr int memory_type_wc_garlic = 3;
 constexpr int map_protection = 0x33;
@@ -418,20 +422,15 @@ void draw_text(std::uint32_t *pixels, unsigned x, unsigned y, std::string_view v
     }
 }
 
-void flush_range(void *address, std::size_t length) noexcept
+void present_pixels(void *destination) noexcept
 {
+    std::memcpy(destination, staging, tiled_bytes);
 #if defined(__x86_64__)
-    auto *at = static_cast<std::uint8_t *>(address);
-    const auto *end = at + length;
-
-    for (; at < end; at += 64)
-        __asm__ volatile("clflush (%0)" : : "r"(at) : "memory");
-    __asm__ volatile("mfence" ::: "memory");
-#else
-    (void)address;
-    (void)length;
+    // Complete sequential writes to the WC VideoOut allocation before flip.
+    __asm__ volatile("sfence" ::: "memory");
 #endif
 }
+
 } // namespace
 
 void Canvas::clear(Color color) noexcept
@@ -513,11 +512,18 @@ void read_asset_bytes(const char *path, std::span<std::uint8_t> destination) noe
 
 void Canvas::region(unsigned x,unsigned y,unsigned w,unsigned h,const std::uint32_t *source,unsigned stride,unsigned sx,unsigned sy,unsigned sw,unsigned sh,bool dim) noexcept
 {
-    if(!source||!w||!h||!sw||!sh)return;
-    for(unsigned yy=0;yy<h&&y+yy<frame_height;yy++)for(unsigned xx=0;xx<w&&x+xx<frame_width;xx++){
-        auto value=source[(sy+yy*sh/h)*stride+sx+xx*sw/w];
-        if(dim){unsigned r=value&255,g=(value>>8)&255,b=(value>>16)&255;if(r+g+b>160){unsigned grey=(r+g+b)/6;value=0xff000000|(grey<<16)|(grey<<8)|grey;}}
-        put_pixel_unchecked(pixels_,x+xx,y+yy,static_cast<Color>(value));
+    if(!source||!w||!h||!sw||!sh||x>=frame_width||y>=frame_height)return;
+    const unsigned width=w<frame_width-x?w:frame_width-x;
+    const unsigned height=h<frame_height-y?h:frame_height-y;
+    unsigned columns[frame_width];
+    for(unsigned xx=0;xx<width;xx++)columns[xx]=sx+xx*sw/w;
+    for(unsigned yy=0;yy<height;yy++){
+        const auto *row=source+(sy+yy*sh/h)*stride;
+        for(unsigned xx=0;xx<width;xx++){
+            auto value=row[columns[xx]];
+            if(dim){unsigned r=value&255,g=(value>>8)&255,b=(value>>16)&255;if(r+g+b>160){unsigned grey=(r+g+b)/6;value=0xff000000|(grey<<16)|(grey<<8)|grey;}}
+            put_pixel_unchecked(pixels_,x+xx,y+yy,static_cast<Color>(value));
+        }
     }
 }
 
@@ -550,9 +556,9 @@ void Canvas::region(unsigned x,unsigned y,unsigned w,unsigned h,const std::uint3
     if (result < 0)
         halt("FF1: direct-memory mapping failed");
 
-    Canvas first{static_cast<std::uint32_t *>(mapped)};
+    Canvas first{staging};
     auto *second_frame = static_cast<std::uint8_t *>(mapped) + frame_bytes;
-    Canvas second{reinterpret_cast<std::uint32_t *>(second_frame)};
+    Canvas second{staging};
 
     int user_ids[4]{-1, -1, -1, -1};
     int pad_handle = -1;
@@ -565,8 +571,8 @@ void Canvas::region(unsigned x,unsigned y,unsigned w,unsigned h,const std::uint3
 
     Input input{0, 0, false};
     frame(first, input);
-    frame(second, input);
-    flush_range(mapped, memory_bytes);
+    present_pixels(mapped);
+    present_pixels(second_frame);
 
     std::array<VideoBuffer, 2> buffers{{
         {mapped, nullptr, nullptr, nullptr},
@@ -608,10 +614,11 @@ void Canvas::region(unsigned x,unsigned y,unsigned w,unsigned h,const std::uint3
 
         Canvas &canvas = back_buffer == 0 ? first : second;
         frame(canvas, input);
-        flush_range(mapped, memory_bytes);
+        present_pixels(back_buffer == 0 ? mapped : second_frame);
         (void)sceVideoOutSubmitFlip(video, static_cast<std::int32_t>(back_buffer), 1, 1);
         (void)sceVideoOutWaitVblank(video);
         back_buffer ^= 1;
     }
 }
 } // namespace ps5::demo
+

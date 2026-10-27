@@ -8,3 +8,4 @@ int main(){
  free(p);assert(ff1_test_calloc(SIZE_MAX,2)==nullptr);
  p=static_cast<unsigned char*>(ff1_test_calloc(0,99));assert(p);free(p);
 }
+

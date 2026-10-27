@@ -15,3 +15,4 @@ int main(){
  auto *large=reserved_heap::allocate(16*1024*1024);assert(large);__wrap_free(large);
  assert(!reserved_heap::allocate(16*1024*1024+1));
 }
+

@@ -8,3 +8,4 @@ void submit(const std::int16_t *,std::size_t) noexcept;
 void set_active(bool active) noexcept;
 const char *status() noexcept;
 }
+

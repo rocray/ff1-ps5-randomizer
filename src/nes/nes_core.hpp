@@ -29,3 +29,4 @@ void save_ram(NesState &);
 void unload_rom(NesState &);
 void init_core_glue(NesState *);
 }
+

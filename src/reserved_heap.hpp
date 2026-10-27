@@ -6,3 +6,4 @@ bool owns(const void *) noexcept;
 void release(void *) noexcept;
 std::size_t size(const void *) noexcept;
 }
+

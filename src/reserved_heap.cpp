@@ -45,3 +45,4 @@ extern "C" void *__wrap_realloc(void *p,std::size_t n){
  for(std::size_t i=0;i<old;i++)out[i]=static_cast<unsigned char*>(p)[i];
  reserved_heap::release(p);return out;
 }
+

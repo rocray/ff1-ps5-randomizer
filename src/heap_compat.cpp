@@ -29,3 +29,4 @@ extern "C" __attribute__((visibility("hidden"))) void *calloc(std::size_t count,
     for(std::size_t i=0;i<bytes;i++)out[i]=0;
     return p;
 }
+

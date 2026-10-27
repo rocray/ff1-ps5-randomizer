@@ -38,6 +38,8 @@ enum class Color : std::uint32_t
 
 namespace pad
 {
+inline constexpr std::uint32_t l3 = 0x0002;
+inline constexpr std::uint32_t r3 = 0x0004;
 inline constexpr std::uint32_t up = 0x0010;
 inline constexpr std::uint32_t right = 0x0020;
 inline constexpr std::uint32_t down = 0x0040;
@@ -102,3 +104,4 @@ void read_asset_text(const char *path, std::span<char> destination,
                      std::string_view fallback) noexcept;
 void read_asset_bytes(const char *path, std::span<std::uint8_t> destination) noexcept;
 } // namespace ps5::demo
+

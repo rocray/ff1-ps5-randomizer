@@ -181,3 +181,26 @@
   existing framebuffer/input/tracker tests. Native mapping and SELF checks PASS.
 - Native AudioOut playback, autosplits, save permissions and visual output still require
   PS5 test. No emulator save-state resume; CONTINUE RUN is current process only.
+
+
+## Test11 — overlay performance and L3 + R3 menu (2026-10-27)
+- Hardware report for Test10: ROM and audio work, but overlay visible runs about
+  half speed (20 seconds real time for 10 game seconds). Hiding overlay restores
+  normal speed. This isolates the expensive overlay path; audio starvation follows.
+- Preserve working SELF/runtime, reserved allocator and Test10 assets.
+- Canvas now renders to cached BSS with the SAME proven tiled address layout.
+  Present copies only the 8,847,360-byte tiled surface sequentially to the selected
+  WC back buffer and sfence completes writes. Removed per-frame clflush across
+  both 16MiB buffers. Registration, two-buffer flip order and native format retained.
+- Panel border bands paint once instead of six overlapping full-panel fills;
+  nearest-neighbor region scaling hoists divisions outside the per-pixel loop.
+- Monotonic scheduler runs NES at core-reported FPS independently of display FPS,
+  bounded to four catch-up frames. Pause/menu reset debt. Timer still advances only
+  through actual emulation; no wall-clock-only cosmetic timer correction.
+- Clicking BOTH sticks (L3 + R3), either press order, saves SRAM and opens menu.
+  Hold does not retrigger; Triangle no longer exits gameplay. Help/footer updated.
+- Host PASS: identical panel pixels; scale/clipping/dim pixels; cached overlay
+  benchmark 9.14ms/frame on this host (not PS5); scheduler 1202 frames over 20s
+  at 30/60/120 render FPS; pause/stall cap/chord edges. Native link, segment mapping
+  and signed SELF integrity PASS. Test11 hardware performance pending.
+- eboot SHA256: 2c5595a7909c3eb800cf321e2041b112db8169006c365fe410bdd2e97256bdb4

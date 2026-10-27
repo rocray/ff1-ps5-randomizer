@@ -99,3 +99,4 @@ void run_frame(NesState &s,std::uint32_t buttons) {
     if(s.frames%1800==0)save_ram(s);
 }
 }
+

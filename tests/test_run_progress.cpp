@@ -14,3 +14,4 @@ int main(){
  for(unsigned i=0;i<AudioQueue::capacity+3;i++)q.push(in,1);assert(q.count==AudioQueue::capacity);q.clear();assert(q.pop(out,1)==0);
  puts("PASS: timing predicate, best splits, practice, records reload/corruption/ROM isolation, stereo queue");
 }
+

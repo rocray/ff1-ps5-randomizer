@@ -33,3 +33,4 @@ new="unsigned char ff1_read_cpu(unsigned address) { if(!((address >= 0x6000 && a
 s=re.sub(r'unsigned char ff1_read_cpu\(unsigned address\) \{[^\n]*\}',new,s)
 p.write_text(s)
 PYUPDATE
+

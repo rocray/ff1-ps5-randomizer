@@ -89,3 +89,4 @@ void init_core_glue(NesState *state) {
     retro_set_input_poll(poll);retro_set_input_state(input);
 }
 }
+

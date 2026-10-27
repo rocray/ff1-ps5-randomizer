@@ -8,6 +8,8 @@
 
 #include "demo_renderer.hpp"
 #include "title_music.hpp"
+#include "frame_pacer.hpp"
+#include <time.h>
 #include "nes/nes_core.hpp"
 
 #include <cstdint>
@@ -33,6 +35,12 @@ NesState *nes = nullptr;
 std::uint32_t *scaled_game = nullptr;
 static std::uint32_t icon_art[1672*941];
 bool show_overlay=true;
+FramePacer pacer;
+std::uint64_t monotonic_us() noexcept {
+    timespec t{};
+    if(clock_gettime(CLOCK_MONOTONIC,&t)!=0)return 0;
+    return static_cast<std::uint64_t>(t.tv_sec)*1000000+t.tv_nsec/1000;
+}
 
 enum class Screen
 {
@@ -77,11 +85,16 @@ bool load_available_rom() {
 
 void draw_panel(Canvas &canvas, unsigned x, unsigned y, unsigned width, unsigned height) noexcept
 {
-    canvas.rectangle(x,y,width,height,Color::ink);
-    canvas.rectangle(x+2,y+2,width-4,height-4,Color::steel);
-    canvas.rectangle(x+4,y+4,width-8,height-8,Color::white);
-    canvas.rectangle(x+7,y+7,width-14,height-14,Color::steel);
-    canvas.rectangle(x+10,y+10,width-20,height-20,Color::ink);
+    // Paint each border band only once rather than six full overlapping panels.
+    const unsigned edges[]={0,2,4,7,10,12};
+    const Color colors[]={Color::ink,Color::steel,Color::white,Color::steel,Color::ink};
+    for(unsigned i=0;i<5;i++){
+        unsigned d=edges[i],n=edges[i+1]-d;
+        canvas.rectangle(x+d,y+d,width-2*d,n,colors[i]);
+        canvas.rectangle(x+d,y+height-d-n,width-2*d,n,colors[i]);
+        canvas.rectangle(x+d,y+d+n,n,height-2*(d+n),colors[i]);
+        canvas.rectangle(x+width-d-n,y+d+n,n,height-2*(d+n),colors[i]);
+    }
     for(unsigned row=12;row<height-12;row++){
         unsigned blue=85+(height-row)*35/height;
         canvas.rectangle(x+12,y+row,width-24,1,static_cast<Color>(0xff000000|(blue<<16)|(10<<8)|4));
@@ -96,7 +109,7 @@ void draw_button_footer(Canvas &canvas) noexcept
     canvas.text(115,1018,"SELECT",4,Color::white);
     canvas.circle(322,1030,20,Color::steel);canvas.circle(322,1030,14,Color::bad);
     canvas.text(360,1018,"BACK",4,Color::white);
-    canvas.text(1370,1020,"ORIGINAL FF1 / TEST 10",3,Color::steel);
+    canvas.text(1370,1020,"ORIGINAL FF1 / TEST 11",3,Color::steel);
 }
 
 void draw_title(Canvas &canvas) noexcept
@@ -131,7 +144,7 @@ void draw_help(Canvas &canvas) noexcept
       "DELTA COMPARES WITH YOUR BEST SPLIT","DIM TIMES SHOW YOUR PREVIOUS BEST",
       "ITEM ICONS LIGHT UP WHEN ACQUIRED","QUEST PROGRESS AT START = PRACTICE",
       "PRACTICE DOES NOT REPLACE YOUR BEST","R1 PAUSES GAME AND TIMER",
-      "SQUARE SHOWS / HIDES THE OVERLAY","TRIANGLE SAVES SRAM AND OPENS MENU",
+      "SQUARE SHOWS / HIDES THE OVERLAY","L3 + R3 SAVES SRAM AND OPENS MENU",
       "OPTIONS = NES START / TOUCH = SELECT"};
     for(unsigned i=0;i<13;i++)canvas.text(805,385+i*38,lines[i],3,i?Color::white:Color::gold);
     canvas.text(805,910,"O BACK TO MENU",3,Color::steel);
@@ -156,9 +169,9 @@ void draw_menu(Canvas &canvas) noexcept
     if(background)canvas.region(855,463,440,105,background,1920,855,463,440,105);
     const char *details[4][4]={
         {"MODE: ORIGINAL FF1","TIMER: AUTO AT OVERWORLD","SPLITS: BEST MILESTONE TIMES","ROM: FF1.NES"},
-        {"RESUME THIS APP SESSION","YOUR CLOCK AND ITEMS REMAIN","TRIANGLE RETURNS TO MENU",""},
+        {"RESUME THIS APP SESSION","YOUR CLOCK AND ITEMS REMAIN","L3 + R3 RETURNS TO MENU",""},
         {"LOOPING PRELUDE", "PRESS X TO TOGGLE MUSIC","GAME AUDIO IS ALWAYS ENABLED",music::status()},
-        {"TIMER / SPLITS / ITEMS","VIEW THE OVERLAY GUIDE","SQUARE: TOGGLE GAME OVERLAY","R1: PAUSE    TRIANGLE: MENU"}
+        {"TIMER / SPLITS / ITEMS","VIEW THE OVERLAY GUIDE","SQUARE: TOGGLE GAME OVERLAY","R1: PAUSE   L3 + R3: MENU"}
     };
     for(unsigned i=0;i<4;i++)canvas.text(820,590+i*43,details[selection][i],3,Color::white);
     canvas.rectangle(810,785,540,2,Color::white);
@@ -219,7 +232,7 @@ void draw_overlay(Canvas &canvas) noexcept {
         unsigned x=845+i*165;canvas.region(x,957,90,67,icon_art,1672,vx[i]-43,827,86,64,!t.seen[16+i]);canvas.text_centered(x+45,1036,item_names[16+i],2,Color::white);
     }
     canvas.text(1395,1028,"SQUARE OVERLAY / R1 PAUSE",2,Color::steel);
-    canvas.text(1395,1055,nes->records_saved?"TRIANGLE MENU / TEST 10":"BEST SAVE FAILED",2,nes->records_saved?Color::steel:Color::bad);
+    canvas.text(1395,1055,nes->records_saved?"L3 + R3 MENU / TEST 11":"BEST SAVE FAILED",2,nes->records_saved?Color::steel:Color::bad);
 }
 
 void draw_message(Canvas &canvas) noexcept
@@ -235,6 +248,7 @@ void draw_message(Canvas &canvas) noexcept
 void draw_frame(Canvas &canvas, const Input &input) noexcept
 {
     music::start();
+    if(screen!=Screen::gameplay)pacer.reset();
     music::set_game(screen==Screen::gameplay && nes && nes->running);
     music::set_active(music_enabled && screen != Screen::gameplay);
     if (screen != Screen::gameplay && background != nullptr)
@@ -294,14 +308,15 @@ void draw_frame(Canvas &canvas, const Input &input) noexcept
     else if (screen == Screen::gameplay)
     {
         if (nes && nes->loaded && scaled_game) {
-            if(input.pressed & ps5::demo::pad::triangle) {
-                ps5::demo::nes::save_ram(*nes);screen=Screen::menu;return;
+            if(menu_chord(input.held,input.pressed)) {
+                ps5::demo::nes::save_ram(*nes);pacer.reset();music::set_game(false);screen=Screen::menu;return;
             }
             if(input.pressed & ps5::demo::pad::square)show_overlay=!show_overlay;
-            if(input.pressed & ps5::demo::pad::r1)nes->running=!nes->running;
+            if(input.pressed & ps5::demo::pad::r1){nes->running=!nes->running;pacer.reset();}
             if(!input.connected)nes->running=false;
             music::set_game(nes->running);
-            ps5::demo::nes::run_frame(*nes,input.held);
+            unsigned due=pacer.advance(monotonic_us(),nes->fps,nes->running);
+            for(unsigned i=0;i<due;i++)ps5::demo::nes::run_frame(*nes,input.held);
             if(show_overlay){canvas.region(0,0,1376,756,nes->framebuffer,256,0,0,256,240);draw_overlay(canvas);}
             else canvas.region(240,0,1440,1080,nes->framebuffer,256,0,0,256,240);
             if(nes->error[0])canvas.text(20,10,nes->error,3,Color::bad);
@@ -326,3 +341,4 @@ int main()
     ps5::demo::read_asset_bytes("/app0/assets/overlay.raw",{reinterpret_cast<std::uint8_t*>(icon_art),sizeof(icon_art)});
     ps5::demo::run(draw_frame);
 }
+

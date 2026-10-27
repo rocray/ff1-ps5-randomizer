@@ -276,3 +276,4 @@ fi
 printf 'Build complete.\nApp folder: %s\n' "$app"
 [[ $format != ffpkg && $format != all ]] || printf 'FFPKG:     %s\n' "$dist/$title_id.ffpkg"
 [[ $format != ffpfsc && $format != all ]] || printf 'FFPFSC:    %s\n' "$dist/$title_id.ffpfsc"
+

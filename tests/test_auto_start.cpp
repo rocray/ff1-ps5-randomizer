@@ -13,3 +13,4 @@ int main(int argc,char **argv){if(argc!=2)return 4;using namespace ps5::demo::ne
  }
  std::printf("NOT STARTED vehicle=%u music=%u hp=%u\n",ff1_read_cpu(0x42),ff1_read_cpu(0x4b),ff1_read_cpu(0x610a));return 2;
 }
+
