@@ -8,6 +8,7 @@
 
 {
     local:
+        calloc;
         sync;
         _Zn*;
         _Zd*;
