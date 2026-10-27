@@ -2,6 +2,7 @@
 #include "libretro.h"
 #include "nes_core.hpp"
 #include "../demo_renderer.hpp"
+#include "../title_music.hpp"
 #include <cstring>
 #include <cstdarg>
 #include <cstdio>
@@ -47,7 +48,11 @@ static bool environment(unsigned cmd,void *data) {
         format=*static_cast<retro_pixel_format*>(data); return true;
     case RETRO_ENVIRONMENT_GET_CAN_DUPE: *static_cast<bool*>(data)=true; return true;
     case RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE: *static_cast<bool*>(data)=false;return true;
-    case RETRO_ENVIRONMENT_GET_VARIABLE: static_cast<retro_variable*>(data)->value=nullptr;return false;
+    case RETRO_ENVIRONMENT_GET_VARIABLE: {
+        auto *v=static_cast<retro_variable*>(data);
+        if(!std::strcmp(v->key,"fceumm_sndrate_hint")){v->value="48KHz";return true;}
+        v->value=nullptr;return false;
+    }
     case RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY:
     case RETRO_ENVIRONMENT_GET_CORE_ASSETS_DIRECTORY: *static_cast<const char**>(data)="/app0/assets";return true;
     case RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY: *static_cast<const char**>(data)="/download0";return true;
@@ -68,8 +73,8 @@ static void video(const void *data,unsigned width,unsigned height,std::size_t pi
         current->framebuffer[y*256+x]=0xff000000u|(b<<16)|(g<<8)|r;
     }
 }
-static void audio_sample(std::int16_t,std::int16_t) {}
-static std::size_t audio_batch(const std::int16_t*,std::size_t frames) {return frames;}
+static void audio_sample(std::int16_t l,std::int16_t r) {const std::int16_t p[]={l,r};ps5::demo::music::submit(p,1);}
+static std::size_t audio_batch(const std::int16_t *p,std::size_t frames) {ps5::demo::music::submit(p,frames);return frames;}
 static void poll() {}
 static std::int16_t input(unsigned port,unsigned device,unsigned,unsigned id) {
     if(!current || port || device!=RETRO_DEVICE_JOYPAD) return 0;

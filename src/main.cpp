@@ -31,6 +31,8 @@ constexpr std::size_t background_bytes =
 std::uint32_t *background = nullptr;
 NesState *nes = nullptr;
 std::uint32_t *scaled_game = nullptr;
+static std::uint32_t icon_art[1672*941];
+bool show_overlay=true;
 
 enum class Screen
 {
@@ -75,27 +77,31 @@ bool load_available_rom() {
 
 void draw_panel(Canvas &canvas, unsigned x, unsigned y, unsigned width, unsigned height) noexcept
 {
-    canvas.rectangle(x, y, width, height, Color::border);
-    canvas.rectangle(x + 4, y + 4, width - 8, height - 8, Color::navy);
+    canvas.rectangle(x,y,width,height,Color::ink);
+    canvas.rectangle(x+2,y+2,width-4,height-4,Color::steel);
+    canvas.rectangle(x+4,y+4,width-8,height-8,Color::white);
+    canvas.rectangle(x+7,y+7,width-14,height-14,Color::steel);
+    canvas.rectangle(x+10,y+10,width-20,height-20,Color::ink);
+    for(unsigned row=12;row<height-12;row++){
+        unsigned blue=85+(height-row)*35/height;
+        canvas.rectangle(x+12,y+row,width-24,1,static_cast<Color>(0xff000000|(blue<<16)|(10<<8)|4));
+    }
 }
 
 void draw_button_footer(Canvas &canvas) noexcept
 {
-    canvas.rectangle(130, 1006, 26, 26, Color::white);
-    canvas.text(137, 1012, "X", 3, Color::navy);
-    canvas.text(166, 1008, "SELECT", 4, Color::white);
-
-    canvas.circle(448, 1019, 14, Color::white);
-    canvas.text(474, 1008, "BACK", 4, Color::white);
-
-    canvas.text(1110, 1008, "MENU + MUSIC / TEST 09", 3, Color::steel);
+    canvas.rectangle(0,990,1920,90,Color::navy_deep);
+    canvas.rectangle(0,990,1920,2,Color::steel);
+    canvas.circle(72,1030,22,Color::white);canvas.text(62,1018,"X",3,Color::navy_deep);
+    canvas.text(115,1018,"SELECT",4,Color::white);
+    canvas.circle(322,1030,20,Color::steel);canvas.circle(322,1030,14,Color::bad);
+    canvas.text(360,1018,"BACK",4,Color::white);
+    canvas.text(1370,1020,"ORIGINAL FF1 / TEST 10",3,Color::steel);
 }
 
 void draw_title(Canvas &canvas) noexcept
 {
-    canvas.text_centered(960, 56, "FINAL FANTASY", 8, Color::white);
-    canvas.text_centered(960, 142, "RANDOMIZER", 4, Color::gold);
-    canvas.rectangle(760, 186, 400, 4, Color::gold);
+    if(!background){canvas.text(120,65,"FINAL FANTASY",9,Color::white);canvas.text(280,190,"RANDOMIZER",5,Color::gold);}
 }
 
 void draw_hand(Canvas &canvas,unsigned x,unsigned y) noexcept
@@ -109,64 +115,111 @@ void draw_hand(Canvas &canvas,unsigned x,unsigned y) noexcept
 }
 void draw_help(Canvas &canvas) noexcept
 {
-    draw_panel(canvas,140,270,680,650);
-    canvas.text(180,305,"OVERLAY EXAMPLE",5,Color::gold);
-    canvas.text(180,360,"RUN TIME",3,Color::steel);
-    canvas.text(180,405,"00:24:18",8,Color::white);
-    canvas.rectangle(180,485,590,3,Color::border);
-    canvas.text(180,515,"ITEM      FOUND AT    STATUS",3,Color::steel);
-    canvas.text(180,565,"LUTE      00:03:12    HELD",3,Color::good);
-    canvas.text(180,610,"CROWN     00:18:46    FOUND",3,Color::good);
-    canvas.text(180,655,"CRYSTAL   --:--      UNKNOWN",3,Color::steel);
-    canvas.text(180,745,"SAMPLE VALUES - NOT A LIVE RUN",3,Color::gold);
-    canvas.text(180,800,"TRACKER PROFILE: EXPERIMENTAL",3,Color::steel);
-    draw_panel(canvas,860,270,920,650);
-    const char *lines[]={"HOW TO READ YOUR RUN","L1 STARTS / STOPS THE CLOCK",
-        "R1 PAUSES / RESUMES THE GAME","ITEM TIMES START WITH THE CLOCK",
-        "HELD: ITEM IS IN YOUR INVENTORY","FOUND: ACQUIRED EARLIER IN THIS RUN",
-        "UNKNOWN: NOT OBSERVED BY TRACKER","TRIANGLE SAVES SRAM AND OPENS MENU",
-        "CONTINUE RESUMES THIS APP SESSION","X / O = NES A / B",
-        "OPTIONS = START   TOUCHPAD = SELECT","ORB / CHAOS SPLITS: NOT AVAILABLE",
-        "SEED GENERATION: NOT AVAILABLE"};
-    for(unsigned i=0;i<13;i++)canvas.text(900,305+i*43,lines[i],3,i?Color::white:Color::gold);
-    canvas.text(900,875,"O BACK TO MENU",3,Color::steel);
+    canvas.rectangle(60,345,1740,615,Color::navy_deep);
+    draw_panel(canvas,85,350,660,600);draw_panel(canvas,770,350,1010,600);
+    canvas.text(120,385,"OVERLAY GUIDE",5,Color::white);
+    canvas.text(120,450,"RUN TIME",3,Color::steel);
+    canvas.text(120,495,"00:24:18",8,Color::white);
+    canvas.rectangle(110,585,610,2,Color::white);
+    canvas.text(120,620,"MILESTONE   TIME   DELTA",3,Color::white);
+    canvas.text(120,670,"SHIP        08:42  -0:18",3,Color::good);
+    canvas.text(120,715,"CANOE       21:16  +0:32",3,Color::bad);
+    canvas.text(120,800,"SAMPLE VALUES - NOT A LIVE RUN",3,Color::gold);
+    canvas.text(120,850,"GREEN: AHEAD / RED: BEHIND",3,Color::white);
+    const char *lines[]={"HOW TO READ YOUR RUN","AUTO START: FIRST PLAYABLE OVERWORLD",
+      "SHIP / CANOE / AIRSHIP / ORBS / CHAOS","SPLITS ARE ELAPSED TIMES FROM START",
+      "DELTA COMPARES WITH YOUR BEST SPLIT","DIM TIMES SHOW YOUR PREVIOUS BEST",
+      "ITEM ICONS LIGHT UP WHEN ACQUIRED","QUEST PROGRESS AT START = PRACTICE",
+      "PRACTICE DOES NOT REPLACE YOUR BEST","R1 PAUSES GAME AND TIMER",
+      "SQUARE SHOWS / HIDES THE OVERLAY","TRIANGLE SAVES SRAM AND OPENS MENU",
+      "OPTIONS = NES START / TOUCH = SELECT"};
+    for(unsigned i=0;i<13;i++)canvas.text(805,385+i*38,lines[i],3,i?Color::white:Color::gold);
+    canvas.text(805,910,"O BACK TO MENU",3,Color::steel);
 }
 
 void draw_menu(Canvas &canvas) noexcept
 {
-    draw_panel(canvas, 140, 300, 660, 400);
-    for (unsigned index = 0; index < 4; ++index)
-    {
-        const unsigned row_y = 350 + index * 90;
-        if (index == selection)
-        {
-            canvas.rectangle(160, row_y - 14, 620, 64, Color::highlight);
-            draw_hand(canvas,170,row_y-2);
-            canvas.text(245, row_y, menu_items[index], 5, Color::white);
+    draw_panel(canvas,85,350,660,390);
+    for(unsigned i=0;i<4;i++){
+        unsigned yy=430+i*73;
+        if(i==selection){
+            canvas.rectangle(165,yy-20,545,65,Color::white);
+            canvas.rectangle(170,yy-15,535,55,static_cast<Color>(0xffff3018));
+            draw_hand(canvas,120,yy-5);
         }
-        else
-        {
-            canvas.text(245, row_y, menu_items[index], 5, Color::steel);
-        }
+        canvas.text(225,yy,menu_items[i],4,i==selection?Color::white:Color::steel);
     }
-
-    draw_panel(canvas, 880, 300, 900, 400);
-    const char *headings[]={"BEGIN YOUR ADVENTURE","RETURN TO YOUR PARTY","THE PRELUDE","HELP / OVERLAY"};
-    canvas.text_centered(1330, 330, headings[selection], 4, Color::gold);
-    canvas.rectangle(1010, 376, 640, 3, Color::border);
-    const char *lines[4][4]={
-        {"PLAY YOUR FF1 NES ROM", "A NEW RUN RESTARTS THE GAME", "LIVE TIMER AND ITEM TRACKER", "ROM: rom/FF1.NES"},
-        {"RESUME YOUR CURRENT SESSION", "RETURN FROM THE MENU", "WITHOUT RESTARTING THE GAME", ""},
-        {"LOOPING TITLE MUSIC", "PRESS X TO TOGGLE ON / OFF", "MUSIC PAUSES DURING GAMEPLAY", music::status()},
-        {"X / O: NES A / B", "OPTIONS / TOUCH: START / SELECT", "L1: CLOCK   R1: PAUSE", "TRIANGLE: SAVE AND MENU"}
+    draw_panel(canvas,770,350,620,560);
+    canvas.text_centered(1080,390,selection==3?"HELP / OVERLAY":"NEW ADVENTURE",4,Color::white);
+    canvas.rectangle(810,433,540,2,Color::white);
+    // Reuse the approved artwork as an atlas; dynamic text is drawn separately.
+    if(background)canvas.region(855,463,440,105,background,1920,855,463,440,105);
+    const char *details[4][4]={
+        {"MODE: ORIGINAL FF1","TIMER: AUTO AT OVERWORLD","SPLITS: BEST MILESTONE TIMES","ROM: FF1.NES"},
+        {"RESUME THIS APP SESSION","YOUR CLOCK AND ITEMS REMAIN","TRIANGLE RETURNS TO MENU",""},
+        {"LOOPING PRELUDE", "PRESS X TO TOGGLE MUSIC","GAME AUDIO IS ALWAYS ENABLED",music::status()},
+        {"TIMER / SPLITS / ITEMS","VIEW THE OVERLAY GUIDE","SQUARE: TOGGLE GAME OVERLAY","R1: PAUSE    TRIANGLE: MENU"}
     };
-    for(unsigned i=0;i<4;i++)
-        canvas.text(930,415+i*44,lines[selection][i],3,Color::white);
-    canvas.rectangle(980,606,700,64,Color::border);
-    canvas.rectangle(984,610,692,56,Color::navy_deep);
-    const char *actions[]={"PLAY FF1",nes && nes->loaded?"CONTINUE RUN":"NO ACTIVE RUN",
-        music_enabled?"MUSIC: ON":"MUSIC: OFF","OPEN HELP"};
-    canvas.text_centered(1330,624,actions[selection],4,Color::white);
+    for(unsigned i=0;i<4;i++)canvas.text(820,590+i*43,details[selection][i],3,Color::white);
+    canvas.rectangle(810,785,540,2,Color::white);
+    canvas.rectangle(810,810,540,70,Color::white);canvas.rectangle(816,816,528,58,static_cast<Color>(0xffff3018));
+    const char *actions[]={"PLAY FF1",nes&&nes->loaded?"CONTINUE RUN":"NO ACTIVE RUN",music_enabled?"MUSIC: ON":"MUSIC: OFF","OPEN GUIDE"};
+    canvas.text_centered(1080,835,actions[selection],4,Color::white);
+}
+
+void time_text(char *out,std::size_t n,double seconds,bool hours=false) {
+    unsigned t=static_cast<unsigned>(seconds);
+    if(hours)std::snprintf(out,n,"%02u:%02u:%02u",t/3600,(t/60)%60,t%60);
+    else std::snprintf(out,n,"%02u:%02u",t/60,t%60);
+}
+void draw_overlay(Canvas &canvas) noexcept {
+    auto &t=nes->tracker;auto &r=nes->progress;char text[80];
+    draw_panel(canvas,1380,0,540,250);canvas.text(1410,27,"RUN TRACKER",5,Color::white);
+    canvas.rectangle(1400,70,500,2,Color::white);
+    time_text(text,sizeof(text),t.seconds,true);canvas.text(1410,100,text,8,Color::white);
+    std::snprintf(text,sizeof(text),".%02u",static_cast<unsigned>(t.seconds*100)%100);canvas.text(1795,125,text,4,Color::white);
+    const char *status=r.finished?"FINISHED":!r.started?"AUTO: WAITING FOR OVERWORLD":!nes->running?"PAUSED":r.practice?"RESUMED SAVE / PRACTICE":"ORIGINAL FF1 / RUNNING";
+    canvas.text(1410,205,status,3,Color::steel);
+    draw_panel(canvas,1380,255,540,475);canvas.text(1410,282,"MILESTONE    TIME    DELTA",3,Color::white);
+    canvas.rectangle(1400,322,500,2,Color::white);
+    for(unsigned i=0;i<SPLIT_COUNT;i++){
+        unsigned y=350+i*43;canvas.text(1410,y,split_names[i],3,Color::white);
+        if(r.reached[i])time_text(text,sizeof(text),r.split[i]);else if(r.best[i])time_text(text,sizeof(text),r.best[i]);else std::strcpy(text,"--:--");
+        canvas.text(1620,y,text,3,r.reached[i]?Color::white:Color::steel);
+        Color c=Color::steel;std::strcpy(text,"--:--");
+        if(r.reached[i]&&r.best[i]){double delta=r.split[i]-r.best[i];unsigned d=static_cast<unsigned>(delta<0?-delta:delta);std::snprintf(text,sizeof(text),"%c%u:%02u",delta<=0?'-':'+',d/60,d%60);c=delta<=0?Color::good:Color::bad;}
+        canvas.text(1780,y,text,3,c);
+    }
+    canvas.text(1410,704,"DIM TIMES = SAVED BEST",2,Color::steel);
+    draw_panel(canvas,1380,738,540,270);canvas.text(1410,765,"RECENT EVENTS",4,Color::white);canvas.rectangle(1400,807,500,2,Color::white);
+    struct Event {double time;unsigned index;bool split;};Event events[ITEM_COUNT+SPLIT_COUNT];unsigned count=0;
+    for(unsigned i=0;i<ITEM_COUNT;i++)if(t.seen[i])events[count++]={t.acquired[i],i,false};
+    for(unsigned i=3;i<SPLIT_COUNT;i++)if(r.reached[i])events[count++]={r.split[i],i,true};
+    for(unsigned i=0;i<count;i++)for(unsigned j=i+1;j<count;j++)if(events[j].time>events[i].time){auto e=events[i];events[i]=events[j];events[j]=e;}
+    for(unsigned i=0;i<count&&i<3;i++){
+        auto &e=events[i];const char *name=e.split?split_names[e.index]:item_names[e.index];
+        std::snprintf(text,sizeof(text),"%s%s",e.split?"":"GOT ",name);canvas.text(1410,832+i*45,text,3,e.split?Color::good:Color::white);
+        time_text(text,sizeof(text),e.time);canvas.text(1780,832+i*45,text,3,Color::steel);
+    }
+    draw_panel(canvas,0,756,1376,324);canvas.text(28,780,"ITEM TRACKER",4,Color::white);canvas.rectangle(16,825,1340,2,Color::white);
+    const unsigned centers[]={65,140,215,285,357,430,498,571,645,714,786,858,931,1002,1074,1147};
+    for(unsigned i=0;i<16;i++){
+        unsigned x=30+i*83;
+        canvas.region(x,840,56,58,icon_art,1672,centers[i]-25,720,50,56,!t.seen[i]);
+        canvas.text_centered(x+28,910,item_names[i],2,t.seen[i]?Color::white:Color::steel);
+    }
+    canvas.rectangle(16,945,1340,2,Color::white);canvas.text(30,995,"ORBS",3,Color::white);
+    for(unsigned i=0;i<4;i++){
+        unsigned x=180+i*110;canvas.region(x,960,62,64,icon_art,1672,168,825,56,60,!r.orb[i]);
+        const char *names[]={"EARTH","FIRE","WATER","AIR"};canvas.text_centered(x+31,1036,names[i],2,Color::white);
+    }
+    canvas.text(650,995,"VEHICLES",3,Color::white);
+    const unsigned vx[]={803,920,1045};
+    for(unsigned i=0;i<3;i++){
+        unsigned x=845+i*165;canvas.region(x,957,90,67,icon_art,1672,vx[i]-43,827,86,64,!t.seen[16+i]);canvas.text_centered(x+45,1036,item_names[16+i],2,Color::white);
+    }
+    canvas.text(1395,1028,"SQUARE OVERLAY / R1 PAUSE",2,Color::steel);
+    canvas.text(1395,1055,nes->records_saved?"TRIANGLE MENU / TEST 10":"BEST SAVE FAILED",2,nes->records_saved?Color::steel:Color::bad);
 }
 
 void draw_message(Canvas &canvas) noexcept
@@ -182,6 +235,7 @@ void draw_message(Canvas &canvas) noexcept
 void draw_frame(Canvas &canvas, const Input &input) noexcept
 {
     music::start();
+    music::set_game(screen==Screen::gameplay && nes && nes->running);
     music::set_active(music_enabled && screen != Screen::gameplay);
     if (screen != Screen::gameplay && background != nullptr)
         canvas.image(0, 0, screen_width, screen_height, background);
@@ -243,35 +297,19 @@ void draw_frame(Canvas &canvas, const Input &input) noexcept
             if(input.pressed & ps5::demo::pad::triangle) {
                 ps5::demo::nes::save_ram(*nes);screen=Screen::menu;return;
             }
-            if(input.pressed & ps5::demo::pad::l1) nes->timer_armed=!nes->timer_armed;
-            if(input.pressed & ps5::demo::pad::r1) nes->running=!nes->running;
-            if(!input.connected) nes->running=false;
+            if(input.pressed & ps5::demo::pad::square)show_overlay=!show_overlay;
+            if(input.pressed & ps5::demo::pad::r1)nes->running=!nes->running;
+            if(!input.connected)nes->running=false;
+            music::set_game(nes->running);
             ps5::demo::nes::run_frame(*nes,input.held);
-            for(unsigned y=0;y<960;y++) for(unsigned x=0;x<1280;x++)
-                scaled_game[y*1280+x]=nes->framebuffer[(y/4)*256+x/5];
-            canvas.image(30,40,1280,960,scaled_game);
-            draw_panel(canvas,1340,40,550,960);
-            canvas.text(1370,70,"RUN TRACKER",5,Color::gold);
-            char line[80];unsigned t=static_cast<unsigned>(nes->tracker.seconds);
-            std::snprintf(line,sizeof(line),"%02u:%02u:%02u",t/3600,(t/60)%60,t%60);
-            canvas.text(1370,125,line,7,Color::white);
-            canvas.text(1370,195,nes->running?(nes->timer_armed?"CLOCK RUNNING":"L1: START CLOCK"):"PAUSED - R1",3,Color::steel);
-            for(int i=0;i<ITEM_COUNT;i++) {
-                auto &tr=nes->tracker;
-                if(tr.seen[i]) {
-                    unsigned a=static_cast<unsigned>(tr.acquired[i]);
-                    std::snprintf(line,sizeof(line),"%-8s %02u:%02u %s",item_names[i],a/60,a%60,tr.current[i]?"HELD":"FOUND");
-                } else std::snprintf(line,sizeof(line),"%-8s --:--",item_names[i]);
-                canvas.text(1370,260+i*32,line,3,nes->tracker.seen[i]?Color::good:Color::steel);
-            }
-            canvas.text(1370,900,"EXPERIMENTAL FF1 PROFILE",3,Color::gold);
-            canvas.text(1370,945,"ORB / CHAOS: PENDING",3,Color::steel);
-            canvas.text(40,1030,"X=A  O=B  OPTIONS=START  TOUCH=SELECT  R1=PAUSE  TRIANGLE=MENU",3,Color::white);
-            if(nes->error[0]) canvas.text(40,10,nes->error,3,Color::bad);
+            if(show_overlay){canvas.region(0,0,1376,756,nes->framebuffer,256,0,0,256,240);draw_overlay(canvas);}
+            else canvas.region(240,0,1440,1080,nes->framebuffer,256,0,0,256,240);
+            if(nes->error[0])canvas.text(20,10,nes->error,3,Color::bad);
         }
     }
 
     music::set_active(music_enabled && screen != Screen::gameplay);
+    music::set_game(screen==Screen::gameplay && nes && nes->running);
     if(screen != Screen::gameplay) draw_button_footer(canvas);
 }
 } // namespace
@@ -285,5 +323,6 @@ int main()
         ps5::demo::read_asset_bytes("/app0/assets/bg.raw",
                                     {reinterpret_cast<std::uint8_t *>(background),
                                      background_bytes});
+    ps5::demo::read_asset_bytes("/app0/assets/overlay.raw",{reinterpret_cast<std::uint8_t*>(icon_art),sizeof(icon_art)});
     ps5::demo::run(draw_frame);
 }

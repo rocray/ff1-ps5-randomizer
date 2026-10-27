@@ -56,7 +56,13 @@ bool load_rom(NesState &s,std::string_view path) {
     retro_game_info info{filename,s.rom,s.rom_size,nullptr};
     if(!retro_load_game(&info)){retro_deinit();unload_rom(s);s.error=ff1_heap_error()?ff1_heap_error():(s.core_message[0]?s.core_message:"CORE REJECTED ROM (NO DETAIL)");return false;}
     owner=&s;s.loaded=s.running=true;s.timer_armed=false;s.frames=0;s.buttons=0;s.error="";
-    tracker_reset(&s.tracker);
+    tracker_reset(&s.tracker);s.progress={};
+    s.rom_id=14695981039346656037ull;
+    for(std::size_t i=0;i<s.rom_size;i++){s.rom_id^=s.rom[i];s.rom_id*=1099511628211ull;}
+    std::snprintf(s.records_path,sizeof(s.records_path),"/download0/ff1-best-%016llx.bin",static_cast<unsigned long long>(s.rom_id));
+    load_records(s.records_path,s.rom_id,s.progress.best);
+    std::memcpy(s.progress.records,s.progress.best,sizeof(s.progress.best));
+    s.records_saved=true;
     retro_system_av_info av{};retro_get_system_av_info(&av);s.fps=av.timing.fps>1?av.timing.fps:60.0988;
     auto *ram=retro_get_memory_data(RETRO_MEMORY_SAVE_RAM);auto n=retro_get_memory_size(RETRO_MEMORY_SAVE_RAM);
     if(ram&&n){f=std::fopen(s.save_path,"rb");if(f){std::fseek(f,0,SEEK_END);long actual=std::ftell(f);std::rewind(f);if(actual==static_cast<long>(n) && std::fread(ram,1,n,f)!=n)s.error="SRAM READ FAILED";std::fclose(f);}}
@@ -65,7 +71,31 @@ bool load_rom(NesState &s,std::string_view path) {
 void run_frame(NesState &s,std::uint32_t buttons) {
     if(owner!=&s || !s.loaded || !s.running)return;
     s.buttons=buttons;retro_run();++s.frames;
-    if(s.timer_armed){s.tracker.seconds+=1.0/s.fps;std::uint8_t values[ITEM_COUNT];for(int i=0;i<ITEM_COUNT;i++)values[i]=ff1_read_cpu(item_addr[i]);tracker_sample(&s.tracker,values);}
+    auto &r=s.progress;
+    if(!r.started) {
+        unsigned hp=ff1_read_cpu(0x610a)|(ff1_read_cpu(0x610b)<<8);
+        if(overworld_ready(ff1_read_cpu(0x42),ff1_read_cpu(0x4b),hp))++r.stable;else r.stable=0;
+        if(r.stable>=2){
+            r.started=true;s.timer_armed=true;s.tracker.seconds=0;
+            for(int i=0;i<ITEM_COUNT;i++)if(ff1_read_cpu(item_addr[i]))r.practice=true;
+            for(unsigned i=0;i<4;i++)if(ff1_read_cpu(0x6032+i))r.practice=true;
+        }
+    }
+    if(s.timer_armed && !r.finished){
+        s.tracker.seconds+=1.0/s.fps;
+        std::uint8_t values[ITEM_COUNT];for(int i=0;i<ITEM_COUNT;i++)values[i]=ff1_read_cpu(item_addr[i]);
+        tracker_sample(&s.tracker,values);
+        if(r.started){
+            bool changed=false;
+            for(unsigned i=0;i<3;i++)if(values[16+i])changed|=record_milestone(r,i,s.tracker.seconds);
+            const unsigned addresses[]={0x6035,0x6032,0x6033,0x6034};
+            for(unsigned i=0;i<4;i++){r.orb[i]=ff1_read_cpu(addresses[i])!=0;if(r.orb[i])changed|=record_milestone(r,3+i,s.tracker.seconds);}
+            if(ff1_read_cpu(0x6a)==0x7b && ff1_read_cpu(0x6b86)==0xff){
+                changed|=record_milestone(r,7,s.tracker.seconds);r.finished=true;s.timer_armed=false;
+            }
+            if(changed)s.records_saved=save_records(s.records_path,s.rom_id,r.records);
+        }
+    }
     if(s.frames%1800==0)save_ram(s);
 }
 }

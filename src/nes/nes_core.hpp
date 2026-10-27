@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <string_view>
 #include "tracker.hpp"
+#include "run_tracking.hpp"
 namespace ps5::demo::nes {
 struct NesState {
     bool loaded=false, running=false, timer_armed=false;
@@ -13,6 +14,10 @@ struct NesState {
     double fps=60.0988;
     std::uint32_t buttons=0;
     Tracker tracker{};
+    RunProgress progress{};
+    std::uint64_t rom_id=0;
+    char records_path[128]{};
+    bool records_saved=true;
     const char *error="";
     char core_message[160]{};
     unsigned frames=0;

@@ -86,6 +86,8 @@ class Canvas final
     void image(unsigned x, unsigned y, unsigned width, unsigned height,
                const std::uint32_t *pixels) noexcept;
 
+    void region(unsigned x,unsigned y,unsigned w,unsigned h,const std::uint32_t *source,unsigned stride,unsigned sx,unsigned sy,unsigned sw,unsigned sh,bool dim=false) noexcept;
+
   private:
     explicit Canvas(std::uint32_t *pixels) noexcept : pixels_{pixels}
     {

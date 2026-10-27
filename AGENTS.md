@@ -151,3 +151,33 @@
   Original generated mockup unavailable; follows visible reference and existing theme.
 - Menu/help layout visually checked using host render. New Prelude retained.
 - PS5 gameplay and new allocator validation still pending. Full Test09 ZIP includes all files.
+
+## Test10 — confirmed boot, game audio, automatic tracker and approved UI
+- User confirmed Test09 ROM loads on PS5. Preserve reserved calloc pool and linker
+  free/realloc wrappers; known-good eboot SHA256:
+  900c82cc610eaa19b0a673be7293abbd7133c9d734c2238a56ee5664b74a2cd3.
+- Randomizer explicitly deferred. UI says Original FF1, not generated seed/preset.
+- Audio callbacks now feed bounded stereo queue to existing AudioOut worker.
+  Core option fceumm_sndrate_hint=48KHz. Menu music and game audio share output port.
+- Original FF1 profile: automatic start after two frames with valid party HP,
+  overworld vehicle and overworld/ship/airship music. Timer uses emulated frame time;
+  pause and app menu stop it. Timing starts at overworld, not title/new-game selection.
+- Ship/canoe/airship flags 6000/6012/6004; earth/fire/water/air orbs 6035/6032/6033/6034.
+  Chaos stop: formation 006A==7B and battle result 6B86==FF.
+  Read-only bridge expanded to explicit whitelist, including 0042/004B/610A/610B.
+- Primary reference: Entroper/FF1Disassembly variables.inc, bank_0F.asm (GameStart,
+  PrepOverworld and orb handlers), bank_0B.asm (BattleOver_ProcessResult).
+- Per-milestone fastest elapsed times stored in /download0/ff1-best-<ROM FNV64>.bin,
+  checksum/version guarded, with frozen prior-best delta baseline for each run.
+  These are individual best milestone times, not splits from a single full PB run.
+- Existing quest progress at auto-start marks practice; no best records overwritten.
+  Untested modified/randomized ROM profiles are not validated. No competitive timing claim.
+- Approved mockups reused as private raw artwork: bg.raw 1920x1080 RGBA and
+  overlay.raw 1672x941 RGBA atlas. Dynamic text/timer/splits/items drawn in native code.
+  Game screen follows mockup proportions; Square toggles full-screen 4:3 view.
+- Inputs: X=A, O=B, Options=NES Start, touchpad=NES Select, R1 pause, Triangle menu.
+- Host PASS: real ROM boot with nonzero stereo audio; auto-start frame1301 during
+  scripted new-game entry; records persistence/ROM isolation/corruption; stereo queue;
+  existing framebuffer/input/tracker tests. Native mapping and SELF checks PASS.
+- Native AudioOut playback, autosplits, save permissions and visual output still require
+  PS5 test. No emulator save-state resume; CONTINUE RUN is current process only.

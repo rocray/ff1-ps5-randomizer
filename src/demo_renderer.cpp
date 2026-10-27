@@ -158,7 +158,8 @@ struct Glyph
     std::array<std::uint8_t, 7> rows;
 };
 
-constexpr std::array<Glyph, 51> glyphs{{
+constexpr std::array<Glyph, 53> glyphs{{
+    {'+', {0, 4, 4, 31, 4, 4, 0}}, {'=', {0, 0, 31, 0, 31, 0, 0}},
     {' ', {0, 0, 0, 0, 0, 0, 0}},        {'0', {14, 17, 19, 21, 25, 17, 14}},
     {'1', {4, 12, 4, 4, 4, 4, 14}},      {'2', {14, 17, 1, 2, 4, 8, 31}},
     {'3', {30, 1, 1, 14, 1, 1, 30}},     {'4', {2, 6, 10, 18, 31, 2, 2}},
@@ -303,7 +304,7 @@ void notify(std::string_view message) noexcept
         if (glyph.character == character)
             return glyph.rows;
     }
-    return glyphs.front().rows;
+    return glyphs[2].rows;
 }
 
 [[nodiscard]] constexpr std::size_t tiled_byte_offset(unsigned x, unsigned y) noexcept
@@ -507,6 +508,16 @@ void read_asset_bytes(const char *path, std::span<std::uint8_t> destination) noe
         if (count <= 0)
             return;
         offset += static_cast<std::size_t>(count);
+    }
+}
+
+void Canvas::region(unsigned x,unsigned y,unsigned w,unsigned h,const std::uint32_t *source,unsigned stride,unsigned sx,unsigned sy,unsigned sw,unsigned sh,bool dim) noexcept
+{
+    if(!source||!w||!h||!sw||!sh)return;
+    for(unsigned yy=0;yy<h&&y+yy<frame_height;yy++)for(unsigned xx=0;xx<w&&x+xx<frame_width;xx++){
+        auto value=source[(sy+yy*sh/h)*stride+sx+xx*sw/w];
+        if(dim){unsigned r=value&255,g=(value>>8)&255,b=(value>>16)&255;if(r+g+b>160){unsigned grey=(r+g+b)/6;value=0xff000000|(grey<<16)|(grey<<8)|grey;}}
+        put_pixel_unchecked(pixels_,x+xx,y+yy,static_cast<Color>(value));
     }
 }
 
