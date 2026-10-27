@@ -10,6 +10,7 @@
 #include "title_music.hpp"
 #include "frame_pacer.hpp"
 #include "randomizer.hpp"
+#include "qol.hpp"
 #include <time.h>
 #include "nes/nes_core.hpp"
 
@@ -36,6 +37,10 @@ NesState *nes = nullptr;
 std::uint32_t *scaled_game = nullptr;
 static std::uint32_t icon_art[1672*941];
 bool show_overlay=true;
+qol::Settings settings;
+unsigned setting_row=0;
+bool settings_saved=true;
+char seed_stamp[64]="NO TIMESTAMP";
 FramePacer pacer;
 std::uint64_t monotonic_us() noexcept {
     timespec t{};
@@ -51,6 +56,7 @@ enum class Screen
     gameplay,
     generate,
     library,
+    settings,
 };
 
 Screen screen = Screen::menu;
@@ -70,7 +76,7 @@ constexpr const char *menu_items[6] = {
     "SEED LIBRARY",
     "PLAY ORIGINAL",
     "CONTINUE RUN",
-    "TITLE MUSIC",
+    "SETTINGS",
     "HELP / OVERLAY",
 };
 
@@ -120,7 +126,7 @@ void draw_button_footer(Canvas &canvas) noexcept
     canvas.text(115,1018,"SELECT",4,Color::white);
     canvas.circle(322,1030,20,Color::steel);canvas.circle(322,1030,14,Color::bad);
     canvas.text(360,1018,"BACK",4,Color::white);
-    canvas.text(1370,1020,"OFFLINE SEEDS / TEST 12",3,Color::steel);
+    canvas.text(1370,1020,"DISPLAY OPTIONS / TEST 13",3,Color::steel);
 }
 
 void draw_title(Canvas &canvas) noexcept
@@ -183,16 +189,30 @@ void draw_menu(Canvas &canvas) noexcept
         {"EIGHT SAVED SEED SLOTS","PLAY A PREVIOUS RANDOM ROM","SAVES ARE UNIQUE TO EACH ROM","NO NETWORK REQUIRED"},
         {"MODE: ORIGINAL FF1","TIMER: AUTO AT OVERWORLD","YOUR ORIGINAL SAVE IS KEPT","ROM: FF1.NES"},
         {"RESUME THIS APP SESSION","YOUR CLOCK AND ITEMS REMAIN","L3 + R3 RETURNS TO MENU",""},
-        {"LOOPING PRELUDE","PRESS X TO TOGGLE MUSIC","GAME AUDIO IS ALWAYS ENABLED",music::status()},
+        {"SCREEN LAYOUT / SCANLINES","CRT CURVE / TITLE MUSIC","RUN BUTTON FOR NEW ROMS",settings_saved?"SETTINGS SAVED":"SETTINGS SAVE FAILED"},
         {"TIMER / SPLITS / ITEMS","VIEW THE OVERLAY GUIDE","SQUARE: TOGGLE GAME OVERLAY","R1: PAUSE   L3 + R3: MENU"}
     };
     for(unsigned i=0;i<4;i++)canvas.text(820,590+i*43,details[selection][i],3,Color::white);
     canvas.rectangle(810,785,540,2,Color::white);
     canvas.rectangle(810,810,540,70,Color::white);canvas.rectangle(816,816,528,58,static_cast<Color>(0xffff3018));
-    const char *actions[]={"CHOOSE SEED","OPEN LIBRARY","PLAY ORIGINAL",nes&&nes->loaded?"CONTINUE RUN":"NO ACTIVE RUN",music_enabled?"MUSIC: ON":"MUSIC: OFF","OPEN GUIDE"};
+    const char *actions[]={"CHOOSE SEED","OPEN LIBRARY","PLAY ORIGINAL",nes&&nes->loaded?"CONTINUE RUN":"NO ACTIVE RUN","OPEN SETTINGS","OPEN GUIDE"};
     canvas.text_centered(1080,835,actions[selection],4,Color::white);
 }
 
+void update_seed_stamp() noexcept {
+ char path[256];if(randomizer::save_path(seed_library,seed_slot,path,sizeof(path)))qol::read_stamp(path,seed_stamp,sizeof(seed_stamp));else std::strcpy(seed_stamp,"NO TIMESTAMP");
+}
+void draw_settings(Canvas &canvas) noexcept {
+ draw_panel(canvas,85,350,1305,610);canvas.text(125,385,"SETTINGS",5,Color::white);
+ const char *layouts[]={"CLASSIC 4:3","LARGE 4:3 / SIDE TRACKER","INTEGER PIXELS","WIDE STRETCH"};
+ const char *scans[]={"OFF","LIGHT","STRONG"};
+ const char *labels[]={"SCREEN LAYOUT","SCANLINES","CRT CURVE","NEW ROM RUN BUTTON","TITLE MUSIC"};
+ const char *values[]={layouts[settings.layout],scans[settings.scanlines],settings.curve?"ON":"OFF",settings.run?"HOLD CIRCLE":"OFF",music_enabled?"ON":"OFF"};
+ for(unsigned i=0;i<5;i++){unsigned y=475+i*65;if(i==setting_row)draw_hand(canvas,120,y-5);canvas.text(215,y,labels[i],3,Color::white);canvas.text(650,y,values[i],3,i==setting_row?Color::gold:Color::steel);}
+ canvas.text(125,825,"UP / DOWN: SELECT   LEFT / RIGHT OR X: CHANGE",3,Color::white);
+ canvas.text(125,865,"RUN OPTION APPLIES WHEN GENERATING A NEW ROM",3,Color::steel);
+ canvas.text(125,905,settings_saved?"O BACK / SETTINGS SAVED":"SETTINGS SAVE FAILED",3,settings_saved?Color::steel:Color::bad);
+}
 void draw_seed_screen(Canvas &canvas,bool library) noexcept {
     draw_panel(canvas,85,350,1305,610);char line[100];
     canvas.text(125,385,library?"SEED LIBRARY":"NEW RANDOM RUN",5,Color::white);
@@ -202,18 +222,21 @@ void draw_seed_screen(Canvas &canvas,bool library) noexcept {
     if(library){
         for(unsigned i=0;i<randomizer::slots;i++){
             const auto &e=seed_library.entries[i];
-            if(e.crc)std::snprintf(line,sizeof(line),"SLOT %u   SEED %08X",i+1,e.seed);
+            if(e.crc)std::snprintf(line,sizeof(line),"SLOT %u   %08X%s",i+1,e.seed,e.flags?" RUN":"");
             else std::snprintf(line,sizeof(line),"SLOT %u   EMPTY",i+1);
             if(i==seed_slot)draw_hand(canvas,125,575+i*37);
             canvas.text(210,580+i*37,line,3,i==seed_slot?Color::white:Color::steel);
         }
         canvas.text(750,650,"UP / DOWN: CHOOSE SLOT",3,Color::white);
         canvas.text(750,710,"X PLAY    O BACK",3,Color::white);
+        canvas.text(750,780,"SAVE FILE UPDATED",3,Color::steel);
+        canvas.text(750,820,seed_stamp,2,Color::white);
     }else{
         std::snprintf(line,sizeof(line),"%08X",chosen_seed);canvas.text(160,590,line,8,Color::white);
         canvas.rectangle(160+seed_digit*48,655,40,4,Color::gold);
         std::snprintf(line,sizeof(line),"SAVE IN SLOT %u%s",seed_slot+1,seed_library.entries[seed_slot].crc?" (REPLACES LIST ENTRY)":" (EMPTY)");
         canvas.text(160,700,line,3,Color::white);
+        canvas.text(160,555,settings.run?"RUN BUTTON: HOLD CIRCLE":"RUN BUTTON: OFF / CHANGE IN SETTINGS",2,Color::gold);
         canvas.text(160,750,"LEFT / RIGHT: DIGIT   UP / DOWN: CHANGE",3,Color::white);
         canvas.text(160,790,"TRIANGLE: RANDOM SEED   L1 / R1: SLOT",3,Color::white);
         canvas.text(160,850,"X GENERATE AND PLAY    O BACK",4,Color::gold);
@@ -224,7 +247,7 @@ void open_seed(bool create) noexcept {
     const char *error="";bool ok=false;
     if(create){
         for(const char *path:base_paths){
-            ok=randomizer::generate(path,chosen_seed,seed_slot,seed_library,generated_path,sizeof(generated_path),error);
+            ok=randomizer::generate(path,chosen_seed,seed_slot,seed_library,generated_path,sizeof(generated_path),error,"/download0",settings.run!=0);
             if(ok||std::strcmp(error,"BASE ROM MISSING OR WRONG SIZE"))break;
         }
     }else ok=randomizer::select(seed_library,seed_slot,generated_path,sizeof(generated_path),error);
@@ -239,7 +262,7 @@ void time_text(char *out,std::size_t n,double seconds,bool hours=false) {
     if(hours)std::snprintf(out,n,"%02u:%02u:%02u",t/3600,(t/60)%60,t%60);
     else std::snprintf(out,n,"%02u:%02u",t/60,t%60);
 }
-void draw_overlay(Canvas &canvas) noexcept {
+void draw_overlay(Canvas &canvas,bool bottom=true) noexcept {
     auto &t=nes->tracker;auto &r=nes->progress;char text[80];
     draw_panel(canvas,1380,0,540,250);canvas.text(1410,27,"RUN TRACKER",5,Color::white);
     canvas.rectangle(1400,70,500,2,Color::white);
@@ -268,6 +291,7 @@ void draw_overlay(Canvas &canvas) noexcept {
         std::snprintf(text,sizeof(text),"%s%s",e.split?"":"GOT ",name);canvas.text(1410,832+i*45,text,3,e.split?Color::good:Color::white);
         time_text(text,sizeof(text),e.time);canvas.text(1780,832+i*45,text,3,Color::steel);
     }
+    if(bottom){
     draw_panel(canvas,0,756,1376,324);canvas.text(28,780,"ITEM TRACKER",4,Color::white);canvas.rectangle(16,825,1340,2,Color::white);
     const unsigned centers[]={65,140,215,285,357,430,498,571,645,714,786,858,931,1002,1074,1147};
     for(unsigned i=0;i<16;i++){
@@ -285,8 +309,10 @@ void draw_overlay(Canvas &canvas) noexcept {
     for(unsigned i=0;i<3;i++){
         unsigned x=845+i*165;canvas.region(x,957,90,67,icon_art,1672,vx[i]-43,827,86,64,!t.seen[16+i]);canvas.text_centered(x+45,1036,item_names[16+i],2,Color::white);
     }
-    canvas.text(1395,1028,"SQUARE OVERLAY / R1 PAUSE",2,Color::steel);
-    canvas.text(1395,1055,nes->records_saved?"L3 + R3 MENU / TEST 12":"BEST SAVE FAILED",2,nes->records_saved?Color::steel:Color::bad);
+    }
+    canvas.text(1395,1014,nes->saved_at,2,Color::steel);
+    canvas.text(1395,1037,"SQUARE OVERLAY / R1 PAUSE",2,Color::steel);
+    canvas.text(1395,1055,nes->records_saved?"L3 + R3 MENU / TEST 13":"BEST SAVE FAILED",2,nes->records_saved?Color::steel:Color::bad);
 }
 
 void draw_message(Canvas &canvas) noexcept
@@ -325,7 +351,7 @@ void draw_frame(Canvas &canvas, const Input &input) noexcept
             case 0:
                 chosen_seed=static_cast<std::uint32_t>(monotonic_us());screen=Screen::generate;break;
             case 1:
-                randomizer::load_library(seed_library);screen=Screen::library;break;
+                randomizer::load_library(seed_library);update_seed_stamp();screen=Screen::library;break;
             case 2:
                 if (load_available_rom())
                 {
@@ -341,7 +367,7 @@ void draw_frame(Canvas &canvas, const Input &input) noexcept
                 else open_message("NO ACTIVE RUN", "SELECT PLAY FF1 FIRST");
                 break;
             case 4:
-                music_enabled = !music_enabled;
+                screen=Screen::settings;
                 break;
             default:
                 screen=Screen::help;
@@ -349,6 +375,19 @@ void draw_frame(Canvas &canvas, const Input &input) noexcept
             }
         }
         draw_menu(canvas);
+    }
+    else if(screen==Screen::settings){
+        using namespace ps5::demo::pad;
+        if(input.pressed&circle)screen=Screen::menu;
+        if(input.pressed&up)setting_row=(setting_row+4)%5;
+        if(input.pressed&down)setting_row=(setting_row+1)%5;
+        if(input.pressed&(left|right|cross)){
+            unsigned *value=nullptr,count=2;
+            switch(setting_row){case 0:value=&settings.layout;count=4;break;case 1:value=&settings.scanlines;count=3;break;case 2:value=&settings.curve;break;case 3:value=&settings.run;break;default:value=&settings.music;break;}
+            *value=(*value+((input.pressed&left)?count-1:1))%count;
+            music_enabled=settings.music!=0;settings_saved=qol::save(settings);
+        }
+        draw_settings(canvas);
     }
     else if(screen==Screen::generate||screen==Screen::library){
         const bool library=screen==Screen::library;
@@ -358,6 +397,7 @@ void draw_frame(Canvas &canvas, const Input &input) noexcept
         else if(library){
             if(input.pressed&up)seed_slot=(seed_slot+7)%8;
             if(input.pressed&down)seed_slot=(seed_slot+1)%8;
+            if(input.pressed&(up|down))update_seed_stamp();
         }else{
             if(input.pressed&left)seed_digit=(seed_digit+7)%8;
             if(input.pressed&right)seed_digit=(seed_digit+1)%8;
@@ -396,8 +436,10 @@ void draw_frame(Canvas &canvas, const Input &input) noexcept
             music::set_game(nes->running);
             unsigned due=pacer.advance(monotonic_us(),nes->fps,nes->running);
             for(unsigned i=0;i<due;i++)ps5::demo::nes::run_frame(*nes,input.held);
-            if(show_overlay){canvas.region(0,0,1376,756,nes->framebuffer,256,0,0,256,240);draw_overlay(canvas);}
-            else canvas.region(240,0,1440,1080,nes->framebuffer,256,0,0,256,240);
+            const auto view=qol::viewport(settings.layout,show_overlay);
+            const auto *pixels=settings.curve?qol::curve_frame(nes->framebuffer):nes->framebuffer;
+            canvas.region(view.x,view.y,view.w,view.h,pixels,256,0,0,256,240,false,settings.scanlines);
+            if(show_overlay)draw_overlay(canvas,view.bottom);
             if(nes->error[0])canvas.text(20,10,nes->error,3,Color::bad);
         }
     }
@@ -419,6 +461,7 @@ int main()
                                      background_bytes});
     ps5::demo::read_asset_bytes("/app0/assets/overlay.raw",{reinterpret_cast<std::uint8_t*>(icon_art),sizeof(icon_art)});
     randomizer::load_library(seed_library);
+    qol::load(settings);music_enabled=settings.music!=0;
     ps5::demo::run(draw_frame);
 }
 

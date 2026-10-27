@@ -46,19 +46,38 @@ static bool write_atomic(const char *path,const void *bytes,std::size_t size){
  if(ok)ok=std::rename(tmp,path)==0;if(!ok)unlink(tmp);return ok;
 }
 static std::uint32_t library_crc(const Library &l){return crc32(reinterpret_cast<const std::uint8_t*>(&l),offsetof(Library,checksum));}
-static bool rom_path(char *out,std::size_t n,const char *dir,std::uint32_t seed){return std::snprintf(out,n,"%s/ff1-t1-%08x.nes",dir,seed)<int(n);}
+static bool rom_path(char *out,std::size_t n,const char *dir,std::uint32_t seed,bool run=false){return std::snprintf(out,n,"%s/ff1-t1-%08x%s.nes",dir,seed,run?"-run":"")<int(n);}
 bool load_library(Library &l,const char *dir){
  char path[256];std::snprintf(path,sizeof(path),"%s/ff1-seeds-v1.bin",dir);Library candidate{};
- if(!read_exact(path,&candidate,sizeof(candidate))||candidate.magic!=0x31525446||candidate.version!=1||candidate.checksum!=library_crc(candidate)){l={};return false;}
- l=candidate;return true;
+ if(read_exact(path,&candidate,sizeof(candidate))&&candidate.magic==0x31525446&&candidate.version==2&&candidate.checksum==library_crc(candidate)){
+  for(const auto &e:candidate.entries)if(e.flags>1){l={};return false;}
+  l=candidate;return true;
+ }
+ struct OldEntry {std::uint32_t seed,crc;};
+ struct Legacy {std::uint32_t magic,version;OldEntry entries[slots];std::uint32_t checksum;} old{};
+ l={};
+ if(!read_exact(path,&old,sizeof(old))||old.magic!=0x31525446||old.version!=1||old.checksum!=crc32(reinterpret_cast<const std::uint8_t*>(&old),offsetof(Legacy,checksum)))return false;
+ for(unsigned i=0;i<slots;i++)l.entries[i]={old.entries[i].seed,old.entries[i].crc,0};
+ return true; // v1 files remain intact until the next successful generation.
 }
-bool generate(const char *base,std::uint32_t seed,unsigned slot,Library &l,char *out,std::size_t capacity,const char *&error,const char *dir){
+// Original US MMC1 bank 0F:$D077. Equivalent to upstream EnableDash's
+// slowMapMove/BVS variant: normal speed unless NES B is held. No frame skipping.
+bool enable_run(std::uint8_t *rom,std::size_t size){
+ static const std::uint8_t original[]={0xa9,1,0x85,0x34,0xa5,0x2d,0x4a,0xb0,9,0xa5,0x42,0xc9,2,0x90,3,0x4a,0x85,0x34,0x60};
+ static const std::uint8_t patch[]={0xa5,0x42,0x4a,0x69,0,0x4a,0x69,0,0x0a,0x24,0x20,0x70,1,0x4a,0x85,0x34,0x60};
+ constexpr unsigned at=0x3d077+16;
+ if(!rom||size!=rom_size||std::memcmp(rom+at,original,sizeof(original)))return false;
+ std::memcpy(rom+at,patch,sizeof(patch));return true;
+}
+
+bool generate(const char *base,std::uint32_t seed,unsigned slot,Library &l,char *out,std::size_t capacity,const char *&error,const char *dir,bool run){
  if(slot>=slots){error="INVALID SEED SLOT";return false;}
  if(!read_exact(base,base_buffer,rom_size)){error="BASE ROM MISSING OR WRONG SIZE";return false;}
  if(!shuffle(base_buffer,sizeof(base_buffer),seed,generated,error))return false;
- if(!rom_path(out,capacity,dir,seed)||!write_atomic(out,generated,sizeof(generated))){error="CANNOT SAVE GENERATED ROM";return false;}
+ if(run&&!enable_run(generated,sizeof(generated))){error="RUN PATCH VERSION MISMATCH";return false;}
+ if(!rom_path(out,capacity,dir,seed,run)||!write_atomic(out,generated,sizeof(generated))){error="CANNOT SAVE GENERATED ROM";return false;}
  if(!read_exact(out,base_buffer,sizeof(base_buffer))||std::memcmp(base_buffer,generated,sizeof(generated))){error="GENERATED ROM VERIFY FAILED";return false;}
- Library updated=l;updated.entries[slot]={seed,crc32(generated,sizeof(generated))};updated.checksum=library_crc(updated);
+ Library updated=l;updated.entries[slot]={seed,crc32(generated,sizeof(generated)),run?1u:0u};updated.checksum=library_crc(updated);
  char path[256];std::snprintf(path,sizeof(path),"%s/ff1-seeds-v1.bin",dir);
  if(!write_atomic(path,&updated,sizeof(updated))){error="CANNOT SAVE SEED LIBRARY";return false;}
  l=updated;error="";return true;
@@ -66,8 +85,13 @@ bool generate(const char *base,std::uint32_t seed,unsigned slot,Library &l,char 
 bool select(const Library &l,unsigned slot,char *out,std::size_t capacity,const char *&error,const char *dir){
  if(slot>=slots||!l.entries[slot].crc){error="EMPTY SEED SLOT";return false;}
  const auto &e=l.entries[slot];
- if(!rom_path(out,capacity,dir,e.seed)||!read_exact(out,generated,sizeof(generated))){error="SAVED ROM MISSING OR TRUNCATED";return false;}
+ if(!rom_path(out,capacity,dir,e.seed,e.flags!=0)||!read_exact(out,generated,sizeof(generated))){error="SAVED ROM MISSING OR TRUNCATED";return false;}
  if(!validate_nes(generated,sizeof(generated))||crc32(generated,sizeof(generated))!=e.crc){error="SAVED ROM CHECKSUM FAILED";return false;}
  error="";return true;
+}
+bool save_path(const Library &l,unsigned slot,char *out,std::size_t capacity,const char *dir){
+ char path[256];const char *error="";if(!select(l,slot,path,sizeof(path),error,dir))return false;
+ std::uint64_t h=14695981039346656037ull;for(auto b:generated){h^=b;h*=1099511628211ull;}
+ return std::snprintf(out,capacity,"%s/ff1-%016llx.srm",dir,static_cast<unsigned long long>(h))<int(capacity);
 }
 }

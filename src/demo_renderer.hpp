@@ -88,7 +88,7 @@ class Canvas final
     void image(unsigned x, unsigned y, unsigned width, unsigned height,
                const std::uint32_t *pixels) noexcept;
 
-    void region(unsigned x,unsigned y,unsigned w,unsigned h,const std::uint32_t *source,unsigned stride,unsigned sx,unsigned sy,unsigned sw,unsigned sh,bool dim=false) noexcept;
+    void region(unsigned x,unsigned y,unsigned w,unsigned h,const std::uint32_t *source,unsigned stride,unsigned sx,unsigned sy,unsigned sw,unsigned sh,bool dim=false,unsigned scanlines=0) noexcept;
 
   private:
     explicit Canvas(std::uint32_t *pixels) noexcept : pixels_{pixels}
@@ -104,4 +104,5 @@ void read_asset_text(const char *path, std::span<char> destination,
                      std::string_view fallback) noexcept;
 void read_asset_bytes(const char *path, std::span<std::uint8_t> destination) noexcept;
 } // namespace ps5::demo
+
 

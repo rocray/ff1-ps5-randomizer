@@ -510,7 +510,7 @@ void read_asset_bytes(const char *path, std::span<std::uint8_t> destination) noe
     }
 }
 
-void Canvas::region(unsigned x,unsigned y,unsigned w,unsigned h,const std::uint32_t *source,unsigned stride,unsigned sx,unsigned sy,unsigned sw,unsigned sh,bool dim) noexcept
+void Canvas::region(unsigned x,unsigned y,unsigned w,unsigned h,const std::uint32_t *source,unsigned stride,unsigned sx,unsigned sy,unsigned sw,unsigned sh,bool dim,unsigned scanlines) noexcept
 {
     if(!source||!w||!h||!sw||!sh||x>=frame_width||y>=frame_height)return;
     const unsigned width=w<frame_width-x?w:frame_width-x;
@@ -519,8 +519,11 @@ void Canvas::region(unsigned x,unsigned y,unsigned w,unsigned h,const std::uint3
     for(unsigned xx=0;xx<width;xx++)columns[xx]=sx+xx*sw/w;
     for(unsigned yy=0;yy<height;yy++){
         const auto *row=source+(sy+yy*sh/h)*stride;
+        const bool scan=scanlines && (static_cast<unsigned long long>(yy)*sh*2/h)%2;
+        const unsigned brightness=scanlines==1?192:144;
         for(unsigned xx=0;xx<width;xx++){
             auto value=row[columns[xx]];
+            if(scan){unsigned r=(value&255)*brightness/256,g=((value>>8)&255)*brightness/256,b=((value>>16)&255)*brightness/256;value=0xff000000|(b<<16)|(g<<8)|r;}
             if(dim){unsigned r=value&255,g=(value>>8)&255,b=(value>>16)&255;if(r+g+b>160){unsigned grey=(r+g+b)/6;value=0xff000000|(grey<<16)|(grey<<8)|grey;}}
             put_pixel_unchecked(pixels_,x+xx,y+yy,static_cast<Color>(value));
         }
@@ -621,4 +624,5 @@ void Canvas::region(unsigned x,unsigned y,unsigned w,unsigned h,const std::uint3
     }
 }
 } // namespace ps5::demo
+
 

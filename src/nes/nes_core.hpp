@@ -18,6 +18,7 @@ struct NesState {
     std::uint64_t rom_id=0;
     char records_path[128]{};
     bool records_saved=true;
+    char saved_at[64]="NO TIMESTAMP";
     const char *error="";
     char core_message[160]{};
     unsigned frames=0;

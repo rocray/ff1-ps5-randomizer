@@ -76,3 +76,10 @@ The BlackBear icon, selection artwork, and default selection track
 is titled `Night Drive`.
 
 No proprietary runtime module, encryption key, or game file is included.
+
+## FF1 movement reference
+The optional run-button routine follows the documented 6502 movement logic in
+FiendsOfTheElements/FF1Randomizer, FF1Lib/SpeedHacks.cs, commit
+e49d72e20f2dcb2c034affddce29f72d54b60d5e (EnableDash / slowMapMove).
+Our application verifies and patches the original MMC1 ROM, not that project's
+expanded MMC3 ROM. Seeds and presets are not upstream-compatible.

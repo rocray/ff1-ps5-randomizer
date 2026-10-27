@@ -2,6 +2,7 @@
 #include "nes_core.hpp"
 #include "libretro.h"
 #include "../randomizer.hpp"
+#include "../qol.hpp"
 #include <cstdio>
 #include <cstring>
 #include <new>
@@ -24,6 +25,7 @@ void save_ram(NesState &s) {
     bool ok=std::fwrite(p,1,n,f)==n;
     if(std::fclose(f)!=0)ok=false;
     if(!ok || std::rename(tmp,s.save_path)!=0)s.error="SRAM SAVE FAILED";
+    else {if(qol::stamp_save(s.save_path))qol::read_stamp(s.save_path,s.saved_at,sizeof(s.saved_at));else std::snprintf(s.saved_at,sizeof(s.saved_at),"SAVED / CLOCK UNAVAILABLE");}
 }
 void unload_rom(NesState &s) {
     if(owner==&s){save_ram(s);retro_unload_game();retro_deinit();owner=nullptr;}
@@ -71,6 +73,7 @@ bool load_rom(NesState &s,std::string_view path) {
             s.save_path="/download0/ff1.srm";
         else {std::snprintf(s.save_storage,sizeof(s.save_storage),"/download0/ff1-%016llx.srm",static_cast<unsigned long long>(s.rom_id));s.save_path=s.save_storage;}
     }
+    qol::read_stamp(s.save_path,s.saved_at,sizeof(s.saved_at));
     std::snprintf(s.records_path,sizeof(s.records_path),"/download0/ff1-best-%016llx.bin",static_cast<unsigned long long>(s.rom_id));
     load_records(s.records_path,s.rom_id,s.progress.best);
     std::memcpy(s.progress.records,s.progress.best,sizeof(s.progress.best));

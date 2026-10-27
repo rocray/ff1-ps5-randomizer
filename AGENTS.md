@@ -241,3 +241,30 @@
 - Additional host check: generated seed 00000000 enters a new game and starts the
   automatic tracker without practice flag. Native Test12 eboot SHA256:
   2d3af89bfa84a629ea1794f9b404b83140120420489417d33107e4afd5eb2e98.
+
+## Test13 — FF1 display, timestamp and run QOL
+- User confirmed Test12 works through obtaining the ship on PS5.
+- Settings persist to /download0/ff1-settings-v1.bin with checksum and safe defaults.
+  Default Classic 4:3 (1008x756, full overlay); Large 4:3 (1376x1032, side-only
+  timer/splits/events); Integer Pixels (768x720 overlay, 1024x960 hidden); Wide
+  Stretch retains Test12. Square hides overlay; hidden default is 1440x1080 4:3.
+- Gameplay-only scanlines Off/Light/Strong; optional mild curvature sampled with
+  cached 256x240 map. UI unaffected. This is a lightweight effect, not a CRT shader.
+- SRAM successful writes get .time sidecars, UTC minute timestamp from console clock.
+  UI displays save-file update time, not a savestate or guaranteed latest position.
+  Existing saves display NO TIMESTAMP until next successful write. Seed library
+  reads timestamps only on selection, not every rendered frame.
+- New ROM run-button toggle bakes hold-NES-B/Circle movement into generated ROMs.
+  Equivalent routine to upstream EnableDash slowMapMove/BVS variant, adapted from
+  MMC3 bank1F to original MMC1 bank0F:$D077; checks original 19 bytes before patch.
+  Only 17-byte routine replaced; no emulator fast-forward or battle speed changes.
+- Run ROM filenames have -run suffix and distinct ROM-hash SRAM/best times.
+  v2 library entries add flags; v1 catalog migration preserves all Test12 entries.
+  Existing seeds/original ROM remain unchanged. Toggle affects NEW generation only.
+- Host PASS: layouts/bounds, settings roundtrip/defaults, leap-day UTC conversion,
+  timestamp write/read, curve bounds, run-patch bytes and all vehicle/B speeds,
+  legacy library migration, generated run-ROM disk verification, 100 seed tests,
+  24 core switches, bridge/audio tests. Actual core boot into overworld confirms
+  movement speed 1 normally and 2 with Circle held (test_run_button.cpp).
+- Settings preview visually checked; native compile/link, mapping and SELF PASS.
+  Hardware filter performance/timestamps/run option pending user validation.
