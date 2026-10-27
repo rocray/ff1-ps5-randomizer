@@ -87,7 +87,7 @@ void draw_button_footer(Canvas &canvas) noexcept
     canvas.circle(448, 1019, 14, Color::white);
     canvas.text(474, 1008, "BACK", 4, Color::white);
 
-    canvas.text(1110, 1008, "MENU + MUSIC / TEST 06", 3, Color::steel);
+    canvas.text(1110, 1008, "MENU + MUSIC / TEST 07", 3, Color::steel);
 }
 
 void draw_title(Canvas &canvas) noexcept

@@ -9,6 +9,7 @@
 {
     local:
         calloc;
+        ff1_heap_*;
         sync;
         _Zn*;
         _Zd*;

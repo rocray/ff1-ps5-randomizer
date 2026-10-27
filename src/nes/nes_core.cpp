@@ -6,6 +6,8 @@
 #include <new>
 
 extern "C" unsigned char ff1_read_cpu(unsigned);
+extern "C" void ff1_heap_reset();
+extern "C" const char *ff1_heap_error();
 extern "C" { int open(const char *, int, ...); long read(int, void *, std::size_t); long lseek(int, long, int); int close(int); }
 namespace ps5::demo::nes {
 static NesState *owner=nullptr; // libretro is a single-instance API
@@ -50,9 +52,9 @@ bool load_rom(NesState &s,std::string_view path) {
     close(fd);
     FILE *f=nullptr;
     if(!ok || std::memcmp(s.rom,"NES\x1a",4)!=0){unload_rom(s);s.error="INVALID OR UNREADABLE NES ROM";return false;}
-    s.core_message[0]=0;s.rom_size=static_cast<std::size_t>(size);init_core_glue(&s);retro_init();
+    ff1_heap_reset();s.core_message[0]=0;s.rom_size=static_cast<std::size_t>(size);init_core_glue(&s);retro_init();
     retro_game_info info{filename,s.rom,s.rom_size,nullptr};
-    if(!retro_load_game(&info)){retro_deinit();unload_rom(s);s.error=s.core_message[0]?s.core_message:"CORE REJECTED ROM (NO DETAIL)";return false;}
+    if(!retro_load_game(&info)){retro_deinit();unload_rom(s);s.error=ff1_heap_error()?ff1_heap_error():(s.core_message[0]?s.core_message:"CORE REJECTED ROM (NO DETAIL)");return false;}
     owner=&s;s.loaded=s.running=true;s.timer_armed=false;s.frames=0;s.buttons=0;s.error="";
     tracker_reset(&s.tracker);
     retro_system_av_info av{};retro_get_system_av_info(&av);s.fps=av.timing.fps>1?av.timing.fps:60.0988;

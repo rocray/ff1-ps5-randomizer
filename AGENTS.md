@@ -121,3 +121,11 @@
   prevent compiler transformation into recursive calloc. Existing malloc/free retained.
 - Host regression: ROM-sized zero fill, multiplication overflow, zero size PASS.
 - Preserve known-good runtime; PS5 gameplay validation pending.
+
+## Test07 — quantify remaining allocation failure
+- User reports same allocation error after Test06; calloc hypothesis is not confirmed fixed.
+- Verified native FCEU_malloc calls the app-local calloc directly, which calls malloc.
+- Track failed calloc byte count and show it without printf formatting when ROM load fails.
+- Reset diagnostics before core initialization so early failures are included.
+- New private ff1-prelude.mp3 replaces menu PCM in this package; snd0.at9 unchanged.
+- Test07 is diagnostic. Gameplay remains unverified on PS5.
