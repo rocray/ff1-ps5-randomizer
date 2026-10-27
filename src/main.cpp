@@ -9,6 +9,7 @@
 #include "demo_renderer.hpp"
 #include "title_music.hpp"
 #include "frame_pacer.hpp"
+#include "randomizer.hpp"
 #include <time.h>
 #include "nes/nes_core.hpp"
 
@@ -48,6 +49,8 @@ enum class Screen
     message,
     help,
     gameplay,
+    generate,
+    library,
 };
 
 Screen screen = Screen::menu;
@@ -55,9 +58,17 @@ unsigned selection = 0;
 bool music_enabled = true;
 const char *message_title = "";
 const char *message_line = "";
+randomizer::Library seed_library;
+unsigned seed_slot=0,seed_digit=0;
+std::uint32_t chosen_seed=1;
+char generated_path[256]{};
+char run_label[64]="ORIGINAL FF1";
+const char *base_paths[]={"/app0/rom/FF1.NES","/app0/assets/FF1.NES","/data/homebrew/PPSA01987/rom/FF1.NES","/data/homebrew/PPSA01987/assets/FF1.NES"};
 
-constexpr const char *menu_items[4] = {
-    "PLAY FF1",
+constexpr const char *menu_items[6] = {
+    "NEW RANDOM RUN",
+    "SEED LIBRARY",
+    "PLAY ORIGINAL",
     "CONTINUE RUN",
     "TITLE MUSIC",
     "HELP / OVERLAY",
@@ -109,7 +120,7 @@ void draw_button_footer(Canvas &canvas) noexcept
     canvas.text(115,1018,"SELECT",4,Color::white);
     canvas.circle(322,1030,20,Color::steel);canvas.circle(322,1030,14,Color::bad);
     canvas.text(360,1018,"BACK",4,Color::white);
-    canvas.text(1370,1020,"ORIGINAL FF1 / TEST 11",3,Color::steel);
+    canvas.text(1370,1020,"OFFLINE SEEDS / TEST 12",3,Color::steel);
 }
 
 void draw_title(Canvas &canvas) noexcept
@@ -152,9 +163,9 @@ void draw_help(Canvas &canvas) noexcept
 
 void draw_menu(Canvas &canvas) noexcept
 {
-    draw_panel(canvas,85,350,660,390);
-    for(unsigned i=0;i<4;i++){
-        unsigned yy=430+i*73;
+    draw_panel(canvas,85,350,660,560);
+    for(unsigned i=0;i<6;i++){
+        unsigned yy=420+i*73;
         if(i==selection){
             canvas.rectangle(165,yy-20,545,65,Color::white);
             canvas.rectangle(170,yy-15,535,55,static_cast<Color>(0xffff3018));
@@ -163,21 +174,64 @@ void draw_menu(Canvas &canvas) noexcept
         canvas.text(225,yy,menu_items[i],4,i==selection?Color::white:Color::steel);
     }
     draw_panel(canvas,770,350,620,560);
-    canvas.text_centered(1080,390,selection==3?"HELP / OVERLAY":"NEW ADVENTURE",4,Color::white);
+    canvas.text_centered(1080,390,selection==5?"HELP / OVERLAY":"NEW ADVENTURE",4,Color::white);
     canvas.rectangle(810,433,540,2,Color::white);
     // Reuse the approved artwork as an atlas; dynamic text is drawn separately.
     if(background)canvas.region(855,463,440,105,background,1920,855,463,440,105);
-    const char *details[4][4]={
-        {"MODE: ORIGINAL FF1","TIMER: AUTO AT OVERWORLD","SPLITS: BEST MILESTONE TIMES","ROM: FF1.NES"},
+    const char *details[6][4]={
+        {"PRESET: TREASURE SHUFFLE V1","QUEST ITEMS STAY IN PLACE","GENERATES HERE ON YOUR PS5","NEW SEEDS / SEPARATE SAVES"},
+        {"EIGHT SAVED SEED SLOTS","PLAY A PREVIOUS RANDOM ROM","SAVES ARE UNIQUE TO EACH ROM","NO NETWORK REQUIRED"},
+        {"MODE: ORIGINAL FF1","TIMER: AUTO AT OVERWORLD","YOUR ORIGINAL SAVE IS KEPT","ROM: FF1.NES"},
         {"RESUME THIS APP SESSION","YOUR CLOCK AND ITEMS REMAIN","L3 + R3 RETURNS TO MENU",""},
-        {"LOOPING PRELUDE", "PRESS X TO TOGGLE MUSIC","GAME AUDIO IS ALWAYS ENABLED",music::status()},
+        {"LOOPING PRELUDE","PRESS X TO TOGGLE MUSIC","GAME AUDIO IS ALWAYS ENABLED",music::status()},
         {"TIMER / SPLITS / ITEMS","VIEW THE OVERLAY GUIDE","SQUARE: TOGGLE GAME OVERLAY","R1: PAUSE   L3 + R3: MENU"}
     };
     for(unsigned i=0;i<4;i++)canvas.text(820,590+i*43,details[selection][i],3,Color::white);
     canvas.rectangle(810,785,540,2,Color::white);
     canvas.rectangle(810,810,540,70,Color::white);canvas.rectangle(816,816,528,58,static_cast<Color>(0xffff3018));
-    const char *actions[]={"PLAY FF1",nes&&nes->loaded?"CONTINUE RUN":"NO ACTIVE RUN",music_enabled?"MUSIC: ON":"MUSIC: OFF","OPEN GUIDE"};
+    const char *actions[]={"CHOOSE SEED","OPEN LIBRARY","PLAY ORIGINAL",nes&&nes->loaded?"CONTINUE RUN":"NO ACTIVE RUN",music_enabled?"MUSIC: ON":"MUSIC: OFF","OPEN GUIDE"};
     canvas.text_centered(1080,835,actions[selection],4,Color::white);
+}
+
+void draw_seed_screen(Canvas &canvas,bool library) noexcept {
+    draw_panel(canvas,85,350,1305,610);char line[100];
+    canvas.text(125,385,library?"SEED LIBRARY":"NEW RANDOM RUN",5,Color::white);
+    canvas.text(125,445,"NATIVE TREASURE SHUFFLE V1",4,Color::gold);
+    canvas.text(125,490,"ORDINARY CHEST LOOT SHUFFLED. QUEST ITEMS UNCHANGED.",3,Color::white);
+    canvas.text(125,525,"FIRST OFFLINE PRESET - NOT THE FULL 4.9.7 RANDOMIZER",3,Color::steel);
+    if(library){
+        for(unsigned i=0;i<randomizer::slots;i++){
+            const auto &e=seed_library.entries[i];
+            if(e.crc)std::snprintf(line,sizeof(line),"SLOT %u   SEED %08X",i+1,e.seed);
+            else std::snprintf(line,sizeof(line),"SLOT %u   EMPTY",i+1);
+            if(i==seed_slot)draw_hand(canvas,125,575+i*37);
+            canvas.text(210,580+i*37,line,3,i==seed_slot?Color::white:Color::steel);
+        }
+        canvas.text(750,650,"UP / DOWN: CHOOSE SLOT",3,Color::white);
+        canvas.text(750,710,"X PLAY    O BACK",3,Color::white);
+    }else{
+        std::snprintf(line,sizeof(line),"%08X",chosen_seed);canvas.text(160,590,line,8,Color::white);
+        canvas.rectangle(160+seed_digit*48,655,40,4,Color::gold);
+        std::snprintf(line,sizeof(line),"SAVE IN SLOT %u%s",seed_slot+1,seed_library.entries[seed_slot].crc?" (REPLACES LIST ENTRY)":" (EMPTY)");
+        canvas.text(160,700,line,3,Color::white);
+        canvas.text(160,750,"LEFT / RIGHT: DIGIT   UP / DOWN: CHANGE",3,Color::white);
+        canvas.text(160,790,"TRIANGLE: RANDOM SEED   L1 / R1: SLOT",3,Color::white);
+        canvas.text(160,850,"X GENERATE AND PLAY    O BACK",4,Color::gold);
+        canvas.text(160,910,"SAME SEED + PRESET = SAME ROM. EXISTING SEED SAVES RESUME.",3,Color::steel);
+    }
+}
+void open_seed(bool create) noexcept {
+    const char *error="";bool ok=false;
+    if(create){
+        for(const char *path:base_paths){
+            ok=randomizer::generate(path,chosen_seed,seed_slot,seed_library,generated_path,sizeof(generated_path),error);
+            if(ok||std::strcmp(error,"BASE ROM MISSING OR WRONG SIZE"))break;
+        }
+    }else ok=randomizer::select(seed_library,seed_slot,generated_path,sizeof(generated_path),error);
+    if(!ok){open_message("SEED FAILED",error);return;}
+    if(!ps5::demo::nes::load_rom(*nes,generated_path)){open_message("ROM LOAD FAILED",nes->error);return;}
+    std::snprintf(run_label,sizeof(run_label),"TREASURE V1 / %08X",seed_library.entries[seed_slot].seed);
+    screen=Screen::gameplay;pacer.reset();
 }
 
 void time_text(char *out,std::size_t n,double seconds,bool hours=false) {
@@ -192,7 +246,7 @@ void draw_overlay(Canvas &canvas) noexcept {
     time_text(text,sizeof(text),t.seconds,true);canvas.text(1410,100,text,8,Color::white);
     std::snprintf(text,sizeof(text),".%02u",static_cast<unsigned>(t.seconds*100)%100);canvas.text(1795,125,text,4,Color::white);
     const char *status=r.finished?"FINISHED":!r.started?"AUTO: WAITING FOR OVERWORLD":!nes->running?"PAUSED":r.practice?"RESUMED SAVE / PRACTICE":"ORIGINAL FF1 / RUNNING";
-    canvas.text(1410,205,status,3,Color::steel);
+    canvas.text(1410,185,run_label,2,Color::gold);canvas.text(1410,215,status,2,Color::steel);
     draw_panel(canvas,1380,255,540,475);canvas.text(1410,282,"MILESTONE    TIME    DELTA",3,Color::white);
     canvas.rectangle(1400,322,500,2,Color::white);
     for(unsigned i=0;i<SPLIT_COUNT;i++){
@@ -232,7 +286,7 @@ void draw_overlay(Canvas &canvas) noexcept {
         unsigned x=845+i*165;canvas.region(x,957,90,67,icon_art,1672,vx[i]-43,827,86,64,!t.seen[16+i]);canvas.text_centered(x+45,1036,item_names[16+i],2,Color::white);
     }
     canvas.text(1395,1028,"SQUARE OVERLAY / R1 PAUSE",2,Color::steel);
-    canvas.text(1395,1055,nes->records_saved?"L3 + R3 MENU / TEST 11":"BEST SAVE FAILED",2,nes->records_saved?Color::steel:Color::bad);
+    canvas.text(1395,1055,nes->records_saved?"L3 + R3 MENU / TEST 12":"BEST SAVE FAILED",2,nes->records_saved?Color::steel:Color::bad);
 }
 
 void draw_message(Canvas &canvas) noexcept
@@ -261,28 +315,32 @@ void draw_frame(Canvas &canvas, const Input &input) noexcept
     if (screen == Screen::menu)
     {
         if ((input.pressed & ps5::demo::pad::up) != 0)
-            selection = (selection + 3) % 4;
+            selection = (selection + 5) % 6;
         if ((input.pressed & ps5::demo::pad::down) != 0)
-            selection = (selection + 1) % 4;
+            selection = (selection + 1) % 6;
         if ((input.pressed & ps5::demo::pad::cross) != 0)
         {
             switch (selection)
             {
             case 0:
+                chosen_seed=static_cast<std::uint32_t>(monotonic_us());screen=Screen::generate;break;
+            case 1:
+                randomizer::load_library(seed_library);screen=Screen::library;break;
+            case 2:
                 if (load_available_rom())
                 {
-                    screen = Screen::gameplay;
+                    std::strcpy(run_label,"ORIGINAL FF1");screen = Screen::gameplay;
                 }
                 else
                 {
                     open_message(nes && nes->core_message[0] ? "CORE LOAD FAILED" : "ROM LOAD FAILED", nes ? nes->error : "OUT OF MEMORY");
                 }
                 break;
-            case 1:
+            case 3:
                 if(nes && nes->loaded) screen=Screen::gameplay;
                 else open_message("NO ACTIVE RUN", "SELECT PLAY FF1 FIRST");
                 break;
-            case 2:
+            case 4:
                 music_enabled = !music_enabled;
                 break;
             default:
@@ -291,6 +349,27 @@ void draw_frame(Canvas &canvas, const Input &input) noexcept
             }
         }
         draw_menu(canvas);
+    }
+    else if(screen==Screen::generate||screen==Screen::library){
+        const bool library=screen==Screen::library;
+        using namespace ps5::demo::pad;
+        if(input.pressed&circle)screen=Screen::menu;
+        else if(input.pressed&cross)open_seed(!library);
+        else if(library){
+            if(input.pressed&up)seed_slot=(seed_slot+7)%8;
+            if(input.pressed&down)seed_slot=(seed_slot+1)%8;
+        }else{
+            if(input.pressed&left)seed_digit=(seed_digit+7)%8;
+            if(input.pressed&right)seed_digit=(seed_digit+1)%8;
+            unsigned shift=(7-seed_digit)*4,nibble=(chosen_seed>>shift)&15;
+            if(input.pressed&up)nibble=(nibble+1)&15;
+            if(input.pressed&down)nibble=(nibble+15)&15;
+            chosen_seed=(chosen_seed&~(15u<<shift))|(nibble<<shift);
+            if(input.pressed&triangle)chosen_seed=static_cast<std::uint32_t>(monotonic_us());
+            if(input.pressed&l1)seed_slot=(seed_slot+7)%8;
+            if(input.pressed&r1)seed_slot=(seed_slot+1)%8;
+        }
+        draw_seed_screen(canvas,library);
     }
     else if (screen == Screen::message)
     {
@@ -339,6 +418,8 @@ int main()
                                     {reinterpret_cast<std::uint8_t *>(background),
                                      background_bytes});
     ps5::demo::read_asset_bytes("/app0/assets/overlay.raw",{reinterpret_cast<std::uint8_t*>(icon_art),sizeof(icon_art)});
+    randomizer::load_library(seed_library);
     ps5::demo::run(draw_frame);
 }
+
 

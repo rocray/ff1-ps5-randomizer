@@ -21,6 +21,7 @@ struct NesState {
     const char *error="";
     char core_message[160]{};
     unsigned frames=0;
+    char save_storage[128]{};
     const char *save_path="/download0/ff1.srm";
 };
 bool load_rom(NesState &,std::string_view);
@@ -29,4 +30,5 @@ void save_ram(NesState &);
 void unload_rom(NesState &);
 void init_core_glue(NesState *);
 }
+
 

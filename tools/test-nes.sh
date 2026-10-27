@@ -18,7 +18,7 @@ mkdir -p "$root/build/tests"
 g++ -std=c++20 -O1 -g \
     -I"$root/vendor/fceumm/src/drivers/libretro/libretro-common/include" \
     "$root/tests/test_nes.cpp" "$root/src/nes/nes_core.cpp" "$root/src/nes/libretro_glue.cpp" \
-    "$root/src/nes/run_records.cpp" "$root/tests/audio_stub.cpp" "$root/src/heap_compat.cpp" "$root/src/reserved_heap.cpp" \
+    "$root/src/randomizer.cpp" "$root/src/nes/run_records.cpp" "$root/tests/audio_stub.cpp" "$root/src/heap_compat.cpp" "$root/src/reserved_heap.cpp" \
     -Wl,--wrap=free,--wrap=realloc "$root/vendor/fceumm/fceumm-host.a" -lm -o "$root/build/tests/test_nes"
 ASAN_OPTIONS=detect_leaks=0 "$root/build/tests/test_nes" "$rom"
 
@@ -27,4 +27,5 @@ g++ -std=c++20 -O1 -g -fsanitize=address,undefined \
     "$root/tests/test_libretro_glue.cpp" "$root/src/nes/libretro_glue.cpp" "$root/tests/audio_stub.cpp" \
     -o "$root/build/tests/test_glue"
 ASAN_OPTIONS=detect_leaks=0 "$root/build/tests/test_glue"
+
 

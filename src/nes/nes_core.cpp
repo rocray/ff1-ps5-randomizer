@@ -1,6 +1,7 @@
 // FF1 prototype integration. SPDX-License-Identifier: GPL-3.0-or-later
 #include "nes_core.hpp"
 #include "libretro.h"
+#include "../randomizer.hpp"
 #include <cstdio>
 #include <cstring>
 #include <new>
@@ -31,7 +32,7 @@ void unload_rom(NesState &s) {
 }
 bool load_rom(NesState &s,std::string_view path) {
     if(owner && owner!=&s){s.error="CORE ALREADY IN USE";return false;}
-    unload_rom(s);
+    s.core_message[0]=0;
     char filename[1024];
     if(path.size()>=sizeof(filename)){s.error="ROM PATH TOO LONG";return false;}
     std::memcpy(filename,path.data(),path.size());filename[path.size()]=0;
@@ -39,19 +40,24 @@ bool load_rom(NesState &s,std::string_view path) {
     const int fd=open(filename,0);
     if(fd<0){s.error="ROM OPEN FAILED";return false;}
     const long size=lseek(fd,0,SEEK_END);
-    if(size<16 || size>8*1024*1024){close(fd);s.error="INVALID ROM SIZE / SEEK";return false;}
+    if(size<16 || size>1024*1024){close(fd);s.error="INVALID ROM SIZE / SEEK";return false;}
     if(lseek(fd,0,SEEK_SET)<0){close(fd);s.error="ROM SEEK FAILED";return false;}
-    s.rom=new(std::nothrow) std::uint8_t[size];
-    s.framebuffer=new(std::nothrow) std::uint32_t[256*240]{};
-    bool ok=s.rom && s.framebuffer;
-    std::size_t offset=0;
-    while(ok && offset<static_cast<std::size_t>(size)){
-        const long n=read(fd,s.rom+offset,static_cast<std::size_t>(size)-offset);
-        if(n<=0){ok=false;break;} offset+=static_cast<std::size_t>(n);
+    // Stage and validate BEFORE destroying a running session. No core sees a
+    // truncated, unsupported or oversized cartridge.
+    static std::uint8_t candidate[1024*1024];
+    bool ok=true;std::size_t offset=0;
+    while(offset<static_cast<std::size_t>(size)){
+        const long n=read(fd,candidate+offset,static_cast<std::size_t>(size)-offset);
+        if(n<=0){ok=false;break;}offset+=static_cast<std::size_t>(n);
     }
     close(fd);
+    if(!ok||!randomizer::validate_nes(candidate,size)){s.error="INVALID OR UNSUPPORTED NES ROM";return false;}
+    unload_rom(s);
+    s.rom=new(std::nothrow) std::uint8_t[size];
+    s.framebuffer=new(std::nothrow) std::uint32_t[256*240]{};
+    if(!s.rom||!s.framebuffer){unload_rom(s);s.error="ROM BUFFER ALLOCATION FAILED";return false;}
+    std::memcpy(s.rom,candidate,size);
     FILE *f=nullptr;
-    if(!ok || std::memcmp(s.rom,"NES\x1a",4)!=0){unload_rom(s);s.error="INVALID OR UNREADABLE NES ROM";return false;}
     ff1_heap_reset();s.core_message[0]=0;s.rom_size=static_cast<std::size_t>(size);init_core_glue(&s);retro_init();
     retro_game_info info{filename,s.rom,s.rom_size,nullptr};
     if(!retro_load_game(&info)){retro_deinit();unload_rom(s);s.error=ff1_heap_error()?ff1_heap_error():(s.core_message[0]?s.core_message:"CORE REJECTED ROM (NO DETAIL)");return false;}
@@ -59,6 +65,12 @@ bool load_rom(NesState &s,std::string_view path) {
     tracker_reset(&s.tracker);s.progress={};
     s.rom_id=14695981039346656037ull;
     for(std::size_t i=0;i<s.rom_size;i++){s.rom_id^=s.rom[i];s.rom_id*=1099511628211ull;}
+    // Keep existing original-ROM saves; every generated ROM gets isolated SRAM.
+    if(s.save_path==s.save_storage||std::strcmp(s.save_path,"/download0/ff1.srm")==0){
+        if(s.rom_size==randomizer::rom_size&&randomizer::crc32(s.rom+16,s.rom_size-16)==randomizer::base_crc)
+            s.save_path="/download0/ff1.srm";
+        else {std::snprintf(s.save_storage,sizeof(s.save_storage),"/download0/ff1-%016llx.srm",static_cast<unsigned long long>(s.rom_id));s.save_path=s.save_storage;}
+    }
     std::snprintf(s.records_path,sizeof(s.records_path),"/download0/ff1-best-%016llx.bin",static_cast<unsigned long long>(s.rom_id));
     load_records(s.records_path,s.rom_id,s.progress.best);
     std::memcpy(s.progress.records,s.progress.best,sizeof(s.progress.best));
@@ -99,4 +111,5 @@ void run_frame(NesState &s,std::uint32_t buttons) {
     if(s.frames%1800==0)save_ram(s);
 }
 }
+
 

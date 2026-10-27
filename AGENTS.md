@@ -204,3 +204,40 @@
   at 30/60/120 render FPS; pause/stall cap/chord edges. Native link, segment mapping
   and signed SELF integrity PASS. Test11 hardware performance pending.
 - eboot SHA256: 2c5595a7909c3eb800cf321e2041b112db8169006c365fe410bdd2e97256bdb4
+
+
+## Test12 — first fully offline seed preset (2026-10-27)
+- User confirms Test11 works on PS5. Preserve its renderer, pacing, audio, allocator,
+  SELF startup and runtime shim. User requires generation entirely on PS5.
+- Inspected upstream FiendsOfTheElements/FF1Randomizer: C#/.NET with Blazor UI;
+  cannot directly link into this native app. Full 4.9.7 engine/progression port is
+  NOT implemented. Do not claim compatibility with its seeds, flags or presets.
+- First native preset: Treasure Shuffle v1. Fixed 32-bit PRNG and Fisher-Yates;
+  shuffles existing ordinary chest loot, keeps all quest/orb values and unused
+  slots fixed. No map/code/mapper/enemy/NPC changes. Original US PRG CRC32
+  cebd2a31 and exact 262160-byte supported cartridge required before any patch.
+- Data references: upstream Items.cs / ItemLocations.cs at
+  e49d72e20f2dcb2c034affddce29f72d54b60d5e. Treasure PRG offset 3100,
+  file offset 3110; 256 slots. No upstream algorithm copied or equivalence claimed.
+- Menu: New Random Run, Seed Library, Play Original, Continue Run, Title Music,
+  Help. Eight hex digits edited with D-pad; Triangle picks seed; L1/R1 chooses
+  library slot; X generates/validates/saves/loads. L3+R3 retains save/menu action.
+- Files: /download0/ff1-t1-<8hex>.nes and checksummed ff1-seeds-v1.bin (8 slots).
+  Writes use temp+fsync+rename, then ROM readback/byte verification. Replacing a
+  library slot does not delete old ROM/save files. Same seed resumes its existing SRAM.
+- Generated ROM SRAM isolated by full-ROM hash. Original /download0/ff1.srm kept;
+  best times already isolated by ROM hash. Original source ROM is never modified.
+- Loader stages/validates exact iNES length, supported mapper/size/trainer format
+  BEFORE unloading an existing session. Invalid/missing requests preserve it.
+  Core/allocation failures return errors; no absolute claim of crash immunity.
+- Host PASS: 100 reproducible different-from-base seeds; no changes outside loot;
+  quest bytes and total loot multiset retained; saved-library reload; damaged/truncated
+  file rejection; 24 successive core loads with sound and separate SRAM paths;
+  bad path preserves active session. Existing ROM/bridge tests PASS.
+- Menu/seed editor rendered and visually inspected. Native segment mapping and
+  signed SELF integrity PASS. PS5 generation/write permissions/reload test pending.
+- Full upstream progression randomizer remains future work; current preset is
+  explicitly named and scoped in UI. No PC or network required by this preset.
+- Additional host check: generated seed 00000000 enters a new game and starts the
+  automatic tracker without practice flag. Native Test12 eboot SHA256:
+  2d3af89bfa84a629ea1794f9b404b83140120420489417d33107e4afd5eb2e98.
