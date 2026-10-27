@@ -139,3 +139,15 @@
 - Host failure-injection test verifies the exact 262144-byte fallback, alignment,
   zero fill, free, both-allocator failure and multiplication overflow.
 - PS5 test pending. If fallback fails, message says BOTH ALLOCATORS FAILED.
+
+## Test09 — reserved allocation pool and menu help
+- Test08 console result: both runtime allocators fail at 262144 bytes; cause unknown.
+- calloc now uses a 16MiB BSS pool with 16KiB pages, locking and reusable spans.
+- --wrap=free and --wrap=realloc release/resize pool allocations; foreign pointers
+  delegate to runtime. Keep both flags when linking.
+- Host tests pass: 256KiB allocations, exhaustion, full reuse, resize preservation;
+  actual FF1 boot/video/input/pause/timer/SRAM/item-history using reserved calloc.
+- Added pointing glove and HELP / OVERLAY with sample tracker, controls and limits.
+  Original generated mockup unavailable; follows visible reference and existing theme.
+- Menu/help layout visually checked using host render. New Prelude retained.
+- PS5 gameplay and new allocator validation still pending. Full Test09 ZIP includes all files.

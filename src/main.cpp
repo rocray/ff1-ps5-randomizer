@@ -36,6 +36,7 @@ enum class Screen
 {
     menu,
     message,
+    help,
     gameplay,
 };
 
@@ -49,7 +50,7 @@ constexpr const char *menu_items[4] = {
     "PLAY FF1",
     "CONTINUE RUN",
     "TITLE MUSIC",
-    "CONTROLS",
+    "HELP / OVERLAY",
 };
 
 void open_message(const char *title, const char *line) noexcept
@@ -87,7 +88,7 @@ void draw_button_footer(Canvas &canvas) noexcept
     canvas.circle(448, 1019, 14, Color::white);
     canvas.text(474, 1008, "BACK", 4, Color::white);
 
-    canvas.text(1110, 1008, "MENU + MUSIC / TEST 08", 3, Color::steel);
+    canvas.text(1110, 1008, "MENU + MUSIC / TEST 09", 3, Color::steel);
 }
 
 void draw_title(Canvas &canvas) noexcept
@@ -95,6 +96,40 @@ void draw_title(Canvas &canvas) noexcept
     canvas.text_centered(960, 56, "FINAL FANTASY", 8, Color::white);
     canvas.text_centered(960, 142, "RANDOMIZER", 4, Color::gold);
     canvas.rectangle(760, 186, 400, 4, Color::gold);
+}
+
+void draw_hand(Canvas &canvas,unsigned x,unsigned y) noexcept
+{
+    constexpr const char *rows[]={
+        "     ####       ","    #WWWW###### ","    #WWWWWWWWWW#",
+        " ####WWWW###### ","#WWWWWWWW#      ","#WWWWWWWWW#     ",
+        " #WWWWWWWW#     ","  #WWWWWWW#     ","  ########      "};
+    for(unsigned yy=0;yy<9;yy++)for(unsigned xx=0;xx<16;xx++)
+        if(rows[yy][xx]!=' ')canvas.rectangle(x+xx*4,y+yy*4,4,4,rows[yy][xx]=='W'?Color::white:Color::ink);
+}
+void draw_help(Canvas &canvas) noexcept
+{
+    draw_panel(canvas,140,270,680,650);
+    canvas.text(180,305,"OVERLAY EXAMPLE",5,Color::gold);
+    canvas.text(180,360,"RUN TIME",3,Color::steel);
+    canvas.text(180,405,"00:24:18",8,Color::white);
+    canvas.rectangle(180,485,590,3,Color::border);
+    canvas.text(180,515,"ITEM      FOUND AT    STATUS",3,Color::steel);
+    canvas.text(180,565,"LUTE      00:03:12    HELD",3,Color::good);
+    canvas.text(180,610,"CROWN     00:18:46    FOUND",3,Color::good);
+    canvas.text(180,655,"CRYSTAL   --:--      UNKNOWN",3,Color::steel);
+    canvas.text(180,745,"SAMPLE VALUES - NOT A LIVE RUN",3,Color::gold);
+    canvas.text(180,800,"TRACKER PROFILE: EXPERIMENTAL",3,Color::steel);
+    draw_panel(canvas,860,270,920,650);
+    const char *lines[]={"HOW TO READ YOUR RUN","L1 STARTS / STOPS THE CLOCK",
+        "R1 PAUSES / RESUMES THE GAME","ITEM TIMES START WITH THE CLOCK",
+        "HELD: ITEM IS IN YOUR INVENTORY","FOUND: ACQUIRED EARLIER IN THIS RUN",
+        "UNKNOWN: NOT OBSERVED BY TRACKER","TRIANGLE SAVES SRAM AND OPENS MENU",
+        "CONTINUE RESUMES THIS APP SESSION","X / O = NES A / B",
+        "OPTIONS = START   TOUCHPAD = SELECT","ORB / CHAOS SPLITS: NOT AVAILABLE",
+        "SEED GENERATION: NOT AVAILABLE"};
+    for(unsigned i=0;i<13;i++)canvas.text(900,305+i*43,lines[i],3,i?Color::white:Color::gold);
+    canvas.text(900,875,"O BACK TO MENU",3,Color::steel);
 }
 
 void draw_menu(Canvas &canvas) noexcept
@@ -106,17 +141,17 @@ void draw_menu(Canvas &canvas) noexcept
         if (index == selection)
         {
             canvas.rectangle(160, row_y - 14, 620, 64, Color::highlight);
-            canvas.text(176, row_y - 2, ">", 5, Color::white);
-            canvas.text(220, row_y, menu_items[index], 5, Color::white);
+            draw_hand(canvas,170,row_y-2);
+            canvas.text(245, row_y, menu_items[index], 5, Color::white);
         }
         else
         {
-            canvas.text(220, row_y, menu_items[index], 5, Color::steel);
+            canvas.text(245, row_y, menu_items[index], 5, Color::steel);
         }
     }
 
     draw_panel(canvas, 880, 300, 900, 400);
-    const char *headings[]={"BEGIN YOUR ADVENTURE","RETURN TO YOUR PARTY","THE PRELUDE","CONTROLLER GUIDE"};
+    const char *headings[]={"BEGIN YOUR ADVENTURE","RETURN TO YOUR PARTY","THE PRELUDE","HELP / OVERLAY"};
     canvas.text_centered(1330, 330, headings[selection], 4, Color::gold);
     canvas.rectangle(1010, 376, 640, 3, Color::border);
     const char *lines[4][4]={
@@ -130,7 +165,7 @@ void draw_menu(Canvas &canvas) noexcept
     canvas.rectangle(980,606,700,64,Color::border);
     canvas.rectangle(984,610,692,56,Color::navy_deep);
     const char *actions[]={"PLAY FF1",nes && nes->loaded?"CONTINUE RUN":"NO ACTIVE RUN",
-        music_enabled?"MUSIC: ON":"MUSIC: OFF","READY TO PLAY"};
+        music_enabled?"MUSIC: ON":"MUSIC: OFF","OPEN HELP"};
     canvas.text_centered(1330,624,actions[selection],4,Color::white);
 }
 
@@ -183,6 +218,7 @@ void draw_frame(Canvas &canvas, const Input &input) noexcept
                 music_enabled = !music_enabled;
                 break;
             default:
+                screen=Screen::help;
                 break;
             }
         }
@@ -195,6 +231,11 @@ void draw_frame(Canvas &canvas, const Input &input) noexcept
             screen = Screen::menu;
         draw_menu(canvas);
         draw_message(canvas);
+    }
+    else if (screen == Screen::help)
+    {
+        draw_help(canvas);
+        if(input.pressed & ps5::demo::pad::circle) screen=Screen::menu;
     }
     else if (screen == Screen::gameplay)
     {

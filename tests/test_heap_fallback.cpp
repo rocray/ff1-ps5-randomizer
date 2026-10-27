@@ -1,25 +1,17 @@
+#include "../src/reserved_heap.hpp"
 #include <cassert>
-#include <cstdlib>
 #include <cstring>
-#include <cstdint>
-extern "C" void *ff1_test_calloc(std::size_t,std::size_t);
-extern "C" void ff1_heap_reset();
-extern "C" const char *ff1_heap_error();
-static bool deny=false;
-static unsigned calls=0;
-extern "C" void *ff1_test_malloc(std::size_t){return nullptr;}
-extern "C" int ff1_test_aligned(void **p,std::size_t a,std::size_t n){
- ++calls;if(deny)return 12;
- int result=posix_memalign(p,a,n);if(!result)std::memset(*p,0xa5,n);return result;
-}
+#include <cstdlib>
+extern "C" void __wrap_free(void*);
+extern "C" void *__wrap_realloc(void*,std::size_t);
+extern "C" void __real_free(void*p){std::free(p);}
+extern "C" void *__real_realloc(void*p,std::size_t n){return std::realloc(p,n);}
 int main(){
- ff1_heap_reset();
- auto *p=static_cast<unsigned char*>(ff1_test_calloc(262144,1));assert(p);
- assert(reinterpret_cast<std::uintptr_t>(p)%64==0);
- for(unsigned i=0;i<262144;i++)assert(p[i]==0);
- free(p);assert(!ff1_heap_error());assert(calls==1);
- deny=true;assert(!ff1_test_calloc(262144,1));
- assert(!std::strcmp(ff1_heap_error(),"BOTH ALLOCATORS FAILED: 262144 BYTES"));
- ff1_heap_reset();assert(!ff1_heap_error());
- unsigned previous=calls;assert(!ff1_test_calloc(SIZE_MAX,2));assert(calls==previous);
+ void *blocks[64];for(auto &p:blocks){p=reserved_heap::allocate(262144);assert(p);}
+ assert(!reserved_heap::allocate(1));for(auto p:blocks)__wrap_free(p);
+ auto *p=static_cast<unsigned char*>(reserved_heap::allocate(262144));assert(p);std::memset(p,0x5a,262144);
+ auto *q=static_cast<unsigned char*>(__wrap_realloc(p,524288));assert(q);
+ for(unsigned i=0;i<262144;i++)assert(q[i]==0x5a);__wrap_free(q);
+ auto *large=reserved_heap::allocate(16*1024*1024);assert(large);__wrap_free(large);
+ assert(!reserved_heap::allocate(16*1024*1024+1));
 }
