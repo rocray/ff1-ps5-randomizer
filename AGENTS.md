@@ -112,3 +112,12 @@
 - Preserve preformatted FCEUD_PrintError strings directly through its %s callback.
 - Distinguish CORE LOAD FAILED from ROM LOAD FAILED; marker TEST05.
 - This is a diagnostic correction, not a confirmed emulator loading fix.
+
+## Test06 — calloc compatibility
+- Test05 console result: CORE LOAD FAILED / ERROR ALLOCATING MEMORY.
+- Native fceu-memory.o disassembly proves malloc+memset optimized into calloc.
+- Runtime shim heap table populates malloc/free/posix_memalign only; calloc slot absent.
+- Added app-local hidden calloc with overflow checking and volatile zero-fill to
+  prevent compiler transformation into recursive calloc. Existing malloc/free retained.
+- Host regression: ROM-sized zero fill, multiplication overflow, zero size PASS.
+- Preserve known-good runtime; PS5 gameplay validation pending.
