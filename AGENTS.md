@@ -129,3 +129,13 @@
 - Reset diagnostics before core initialization so early failures are included.
 - New private ff1-prelude.mp3 replaces menu PCM in this package; snd0.at9 unchanged.
 - Test07 is diagnostic. Gameplay remains unverified on PS5.
+
+## Test08 — aligned allocation fallback
+- Test07 console result: CALLOC FAILED: 262144 BYTES. Replacement music confirmed working.
+- This confirms local calloc is reached and malloc returns null for a normal 256KiB
+  request; it does not establish the underlying heap limit or system memory exhaustion.
+- Try free-compatible posix_memalign (64-byte alignment) if malloc fails, then zero
+  the buffer. Both APIs are populated in the runtime heap interface.
+- Host failure-injection test verifies the exact 262144-byte fallback, alignment,
+  zero fill, free, both-allocator failure and multiplication overflow.
+- PS5 test pending. If fallback fails, message says BOTH ALLOCATORS FAILED.
