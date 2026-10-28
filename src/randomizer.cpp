@@ -45,12 +45,21 @@ static bool write_atomic(const char *path,const void *bytes,std::size_t size){
  bool ok=done==size&&fsync(f)==0;if(close(f)!=0)ok=false;
  if(ok)ok=std::rename(tmp,path)==0;if(!ok)unlink(tmp);return ok;
 }
+bool save_options(const ff1logic::Options &options,const char *dir){
+ std::uint32_t data[]={0x314f5246,ff1logic::flags(options),0};data[2]=crc32(reinterpret_cast<const std::uint8_t*>(data),8);
+ char path[256];std::snprintf(path,sizeof(path),"%s/ff1-randomizer-v1.bin",dir);return write_atomic(path,data,sizeof(data));
+}
+bool load_options(ff1logic::Options &options,const char *dir){
+ options={};std::uint32_t data[3]{};char path[256];std::snprintf(path,sizeof(path),"%s/ff1-randomizer-v1.bin",dir);
+ if(!read_exact(path,data,sizeof(data))||data[0]!=0x314f5246||data[2]!=crc32(reinterpret_cast<const std::uint8_t*>(data),8)||!(data[1]&2)||(data[1]&~126u))return false;
+ options={bool(data[1]&4),bool(data[1]&8),bool(data[1]&16),bool(data[1]&32),bool(data[1]&64)};return true;
+}
 static std::uint32_t library_crc(const Library &l){return crc32(reinterpret_cast<const std::uint8_t*>(&l),offsetof(Library,checksum));}
-static bool rom_path(char *out,std::size_t n,const char *dir,std::uint32_t seed,bool run=false){return std::snprintf(out,n,"%s/ff1-t1-%08x%s.nes",dir,seed,run?"-run":"")<int(n);}
+static bool rom_path(char *out,std::size_t n,const char *dir,std::uint32_t seed,unsigned flags=0){if(flags&ff1logic::custom)return std::snprintf(out,n,"%s/ff1-c1-%08x-%02x.nes",dir,seed,flags)<int(n);return std::snprintf(out,n,"%s/ff1-t1-%08x%s.nes",dir,seed,(flags&1)?"-run":"")<int(n);}
 bool load_library(Library &l,const char *dir){
  char path[256];std::snprintf(path,sizeof(path),"%s/ff1-seeds-v1.bin",dir);Library candidate{};
  if(read_exact(path,&candidate,sizeof(candidate))&&candidate.magic==0x31525446&&candidate.version==2&&candidate.checksum==library_crc(candidate)){
-  for(const auto &e:candidate.entries)if(e.flags>1){l={};return false;}
+  for(const auto &e:candidate.entries)if((e.flags&~ff1logic::known_flags)||(e.flags>1&&!(e.flags&ff1logic::custom))){l={};return false;}
   l=candidate;return true;
  }
  struct OldEntry {std::uint32_t seed,crc;};
@@ -70,14 +79,16 @@ bool enable_run(std::uint8_t *rom,std::size_t size){
  std::memcpy(rom+at,patch,sizeof(patch));return true;
 }
 
-bool generate(const char *base,std::uint32_t seed,unsigned slot,Library &l,char *out,std::size_t capacity,const char *&error,const char *dir,bool run){
+bool generate(const char *base,std::uint32_t seed,unsigned slot,Library &l,char *out,std::size_t capacity,const char *&error,const char *dir,bool run,const ff1logic::Options *options){
  if(slot>=slots){error="INVALID SEED SLOT";return false;}
  if(!read_exact(base,base_buffer,rom_size)){error="BASE ROM MISSING OR WRONG SIZE";return false;}
- if(!shuffle(base_buffer,sizeof(base_buffer),seed,generated,error))return false;
+ if(options){if(!ff1logic::shuffle(base_buffer,sizeof(base_buffer),seed,generated,*options,error))return false;}
+ else if(!shuffle(base_buffer,sizeof(base_buffer),seed,generated,error))return false;
+ const unsigned flags=options?ff1logic::flags(*options,run):(run?1u:0u);
  if(run&&!enable_run(generated,sizeof(generated))){error="RUN PATCH VERSION MISMATCH";return false;}
- if(!rom_path(out,capacity,dir,seed,run)||!write_atomic(out,generated,sizeof(generated))){error="CANNOT SAVE GENERATED ROM";return false;}
+ if(!rom_path(out,capacity,dir,seed,flags)||!write_atomic(out,generated,sizeof(generated))){error="CANNOT SAVE GENERATED ROM";return false;}
  if(!read_exact(out,base_buffer,sizeof(base_buffer))||std::memcmp(base_buffer,generated,sizeof(generated))){error="GENERATED ROM VERIFY FAILED";return false;}
- Library updated=l;updated.entries[slot]={seed,crc32(generated,sizeof(generated)),run?1u:0u};updated.checksum=library_crc(updated);
+ Library updated=l;updated.entries[slot]={seed,crc32(generated,sizeof(generated)),flags};updated.checksum=library_crc(updated);
  char path[256];std::snprintf(path,sizeof(path),"%s/ff1-seeds-v1.bin",dir);
  if(!write_atomic(path,&updated,sizeof(updated))){error="CANNOT SAVE SEED LIBRARY";return false;}
  l=updated;error="";return true;
@@ -85,7 +96,7 @@ bool generate(const char *base,std::uint32_t seed,unsigned slot,Library &l,char 
 bool select(const Library &l,unsigned slot,char *out,std::size_t capacity,const char *&error,const char *dir){
  if(slot>=slots||!l.entries[slot].crc){error="EMPTY SEED SLOT";return false;}
  const auto &e=l.entries[slot];
- if(!rom_path(out,capacity,dir,e.seed,e.flags!=0)||!read_exact(out,generated,sizeof(generated))){error="SAVED ROM MISSING OR TRUNCATED";return false;}
+ if(!rom_path(out,capacity,dir,e.seed,e.flags)||!read_exact(out,generated,sizeof(generated))){error="SAVED ROM MISSING OR TRUNCATED";return false;}
  if(!validate_nes(generated,sizeof(generated))||crc32(generated,sizeof(generated))!=e.crc){error="SAVED ROM CHECKSUM FAILED";return false;}
  error="";return true;
 }

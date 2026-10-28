@@ -370,3 +370,49 @@
 - Packaging Test03 reuses verified Test02 artwork bytes via --reuse-artwork.
   Restored source icon PNG failed Pillow decoding in this workspace; do not
   regenerate art from it until repaired. Runtime assets from Test02 are intact.
+
+## FF1 Test14 — native checkbox rules (2026-10-28)
+- Adds persistent independent Treasure, Major Items, Shop Stock+Magic, Shop Prices,
+  Open Spell Learning checkboxes. Square switches seed/options focus; Up/Down
+  chooses row, X toggles, Square returns, X generates. Defaults preserve treasure
+  preset. Run remains separate in Settings. New ff1-randomizer-v1.bin checked
+  options file; generated library entries retain actual rules even after changes.
+- Major pool: all16 quest items, seven existing major chests/eight NPCs/caravan.
+  No ordinary-chest mixing or vehicle/orb shuffle. Native fixed-point checker
+  covers trade/gate/canal/canoe/airship/orb/final-Temple dependencies and requires
+  every major check reachable. Deterministic bounded rejection, no save on failure.
+- NPC patches in tools/asm/ff1-options.asm; checked-in generated patches.hpp means
+  no Python needed on PS5. Highbit of NPC game_flags is persistent claim flag;
+  preserves visibility/event/chest bits. Matoya no longer becomes unavailable
+  after awakening the prince with a shuffled Herb. NPC actual reward uses item
+  name in generic treasure message; vanilla story hints may be inaccurate.
+- Shop pointers/lengths retained. Weapon/armor shops can carry full equipment
+  pools; normal item shops stock chest-tier weapons plus refill safeguards.
+  New 6502 item-shop grant routes weapons into first free party weapon slot;
+  full inventory rejects without charging. Starter weapons/armor affordable.
+- All64 spells shuffled within original eight levels across white/black shops;
+  learning-permission toggle zeroes96 permission bytes but DOES NOT grant MP.
+  Prices optional, bounded; magic/inn/clinic prices unchanged. Caravan major
+  slot is excluded from ordinary stock shuffle. Only original PRG CRC cebd2a31.
+- Custom flags: bit0 run, bit1 custom-v1 marker, bit2 treasure, bit3 major,
+  bit4 shops, bit5 prices, bit6 open magic. Filenames ff1-c1-SEED-FLAGS.nes;
+  old flags0/1 treasure/-run paths still supported; ROM-hash save/best isolation.
+  Same resulting ROM still reuses its prior SRAM (including unchanged original).
+- PASS: 1000 deterministic all-option seeds, 32 checkbox combinations, 11 forced
+  deadlocks, byte-write whitelist, pool/level/shop limits, persisted choices and
+  legacy/custom catalog. ASan/UBSan passed (host leak detection unsupported).
+- PASS: py65 executes actual ROM patches: NPC prerequisites/one-time claims,
+  consumed rewards/Matoya after Herb, all40 weapon IDs/full bags/counter caps,
+  charging only on success, all12 classes/all64 spells in correct level slots.
+- PASS: all32 option combinations plus run patch boot/new-game/automatic timer/
+  audio in FCEUmm. Existing100-seed/24reload/bridge/audio/SRAM/QOL regressions pass.
+  Native mapping/SELF checks and menu preview pass. No full-playthrough claim;
+  progression model assumes combat/leveling/gold farming/retry mechanics.
+- Rebuilt BOTH core archives using current setup-fceumm RAM whitelist. Restored
+  workspace had obsolete Test08 archives, which made automatic-start test fail;
+  do not reuse those archives. tools/build-ff1-options.sh preserves private assets.
+- Complete Test14 repackages verified Test13 ROM/music/art/runtime, updates eboot
+  and guide. Preserve PPSA01987, known-good signed libc, /download0 and Zelda.
+- Shop requests above are now implemented. Exact save-state/timer resume and
+  overall best completed-run history across seeds remain pending, unchanged.
+- Test14 eboot SHA256 3ea1ed26bf2223b7f0aca4c7dff2bf65236cfd56399c200c72dd787b609dd291.

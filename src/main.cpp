@@ -65,7 +65,8 @@ bool music_enabled = true;
 const char *message_title = "";
 const char *message_line = "";
 randomizer::Library seed_library;
-unsigned seed_slot=0,seed_digit=0;
+unsigned seed_slot=0,seed_digit=0,option_row=0;
+bool options_saved=true;bool edit_options=false;ff1logic::Options seed_options;
 std::uint32_t chosen_seed=1;
 char generated_path[256]{};
 char run_label[64]="ORIGINAL FF1";
@@ -126,7 +127,7 @@ void draw_button_footer(Canvas &canvas) noexcept
     canvas.text(115,1018,"SELECT",4,Color::white);
     canvas.circle(322,1030,20,Color::steel);canvas.circle(322,1030,14,Color::bad);
     canvas.text(360,1018,"BACK",4,Color::white);
-    canvas.text(1370,1020,"DISPLAY OPTIONS / TEST 13",3,Color::steel);
+    canvas.text(1370,1020,"DISPLAY OPTIONS / TEST 14",3,Color::steel);
 }
 
 void draw_title(Canvas &canvas) noexcept
@@ -216,44 +217,47 @@ void draw_settings(Canvas &canvas) noexcept {
 void draw_seed_screen(Canvas &canvas,bool library) noexcept {
     draw_panel(canvas,85,350,1305,610);char line[100];
     canvas.text(125,385,library?"SEED LIBRARY":"NEW RANDOM RUN",5,Color::white);
-    canvas.text(125,445,"NATIVE TREASURE SHUFFLE V1",4,Color::gold);
-    canvas.text(125,490,"ORDINARY CHEST LOOT SHUFFLED. QUEST ITEMS UNCHANGED.",3,Color::white);
-    canvas.text(125,525,"FIRST OFFLINE PRESET - NOT THE FULL 4.9.7 RANDOMIZER",3,Color::steel);
     if(library){
+        canvas.text(125,460,"SEED + CHECKBOXES DEFINE EACH ROM",3,Color::gold);
         for(unsigned i=0;i<randomizer::slots;i++){
             const auto &e=seed_library.entries[i];
-            if(e.crc)std::snprintf(line,sizeof(line),"SLOT %u   %08X%s",i+1,e.seed,e.flags?" RUN":"");
+            if(e.crc)std::snprintf(line,sizeof(line),"%u %08X %s%02X%s",i+1,e.seed,(e.flags&2)?"OPT ":"OLD ",e.flags,(e.flags&1)?" R":"");
             else std::snprintf(line,sizeof(line),"SLOT %u   EMPTY",i+1);
-            if(i==seed_slot)draw_hand(canvas,125,575+i*37);
-            canvas.text(210,580+i*37,line,3,i==seed_slot?Color::white:Color::steel);
+            if(i==seed_slot)draw_hand(canvas,125,550+i*40);
+            canvas.text(210,555+i*40,line,3,i==seed_slot?Color::white:Color::steel);
         }
-        canvas.text(750,650,"UP / DOWN: CHOOSE SLOT",3,Color::white);
-        canvas.text(750,710,"X PLAY    O BACK",3,Color::white);
-        canvas.text(750,780,"SAVE FILE UPDATED",3,Color::steel);
-        canvas.text(750,820,seed_stamp,2,Color::white);
+        auto f=seed_library.entries[seed_slot].flags;
+        canvas.text(790,550,(f&2)?"CUSTOM RULES V1":"TREASURE V1",3,Color::gold);
+        const char*names[]={"TREASURE","MAJOR ITEMS","SHOP STOCK","SHOP PRICES","OPEN SPELL LEARNING"};
+        for(unsigned i=0;i<5;i++){bool on=(f&2)?bool(f&(4u<<i)):i==0;std::snprintf(line,sizeof(line),"%s %s",on?"ON ":"OFF",names[i]);canvas.text(790,600+i*36,line,2,on?Color::white:Color::steel);}
+        canvas.text(790,810,seed_stamp,2,Color::white);
+        canvas.text(125,910,"UP / DOWN SLOT   X PLAY   O BACK",3,Color::gold);
     }else{
-        std::snprintf(line,sizeof(line),"%08X",chosen_seed);canvas.text(160,590,line,8,Color::white);
-        canvas.rectangle(160+seed_digit*48,655,40,4,Color::gold);
-        std::snprintf(line,sizeof(line),"SAVE IN SLOT %u%s",seed_slot+1,seed_library.entries[seed_slot].crc?" (REPLACES LIST ENTRY)":" (EMPTY)");
-        canvas.text(160,700,line,3,Color::white);
-        canvas.text(160,555,settings.run?"RUN BUTTON: HOLD CIRCLE":"RUN BUTTON: OFF / CHANGE IN SETTINGS",2,Color::gold);
-        canvas.text(160,750,"LEFT / RIGHT: DIGIT   UP / DOWN: CHANGE",3,Color::white);
-        canvas.text(160,790,"TRIANGLE: RANDOM SEED   L1 / R1: SLOT",3,Color::white);
-        canvas.text(160,850,"X GENERATE AND PLAY    O BACK",4,Color::gold);
-        canvas.text(160,910,"SAME SEED + PRESET = SAME ROM. EXISTING SEED SAVES RESUME.",3,Color::steel);
+        canvas.text(125,455,"PROGRESSION CHECKED / ORIGINAL MAPS",3,Color::gold);
+        std::snprintf(line,sizeof(line),"%08X",chosen_seed);canvas.text(155,525,line,7,edit_options?Color::steel:Color::white);
+        if(!edit_options)canvas.rectangle(155+seed_digit*42,587,36,4,Color::gold);
+        std::snprintf(line,sizeof(line),"SLOT %u / RUN %s",seed_slot+1,settings.run?"ON":"OFF");canvas.text(155,635,line,3,Color::white);
+        canvas.text(155,690,"D-PAD EDIT SEED",3,Color::steel);
+        canvas.text(155,735,"TRIANGLE ROLL",3,Color::steel);
+        canvas.text(155,780,"L1 / R1 SLOT",3,Color::steel);
+        const char*labels[]={"TREASURE SHUFFLE","MAJOR ITEM SHUFFLE","SHOP STOCK + MAGIC","SHOP PRICE SHUFFLE","OPEN SPELL LEARNING"};
+        bool values[]={seed_options.treasure,seed_options.major,seed_options.shops,seed_options.prices,seed_options.open_magic};
+        for(unsigned i=0;i<5;i++){unsigned y=525+i*57;if(edit_options&&option_row==i)draw_hand(canvas,685,y-7);canvas.rectangle(755,y,26,26,Color::steel);canvas.rectangle(758,y+3,20,20,Color::navy_deep);if(values[i]){canvas.rectangle(761,y+6,14,14,Color::gold);}canvas.text(800,y+3,labels[i],3,edit_options&&option_row==i?Color::gold:Color::white);}
+        canvas.text(125,850,edit_options?"UP/DOWN CHOOSE   X TOGGLE   SQUARE SEED":"SQUARE CHECKBOXES   X GENERATE AND PLAY",3,Color::gold);
+        canvas.text(125,910,options_saved?"SPELL LEVELS FIXED / MAJOR ITEMS: 16 QUEST REWARDS":"OPTIONS SAVE FAILED / CURRENT CHOICES STILL ACTIVE",3,options_saved?Color::steel:Color::bad);
     }
 }
 void open_seed(bool create) noexcept {
     const char *error="";bool ok=false;
     if(create){
         for(const char *path:base_paths){
-            ok=randomizer::generate(path,chosen_seed,seed_slot,seed_library,generated_path,sizeof(generated_path),error,"/download0",settings.run!=0);
+            ok=randomizer::generate(path,chosen_seed,seed_slot,seed_library,generated_path,sizeof(generated_path),error,"/download0",settings.run!=0,&seed_options);
             if(ok||std::strcmp(error,"BASE ROM MISSING OR WRONG SIZE"))break;
         }
     }else ok=randomizer::select(seed_library,seed_slot,generated_path,sizeof(generated_path),error);
     if(!ok){open_message("SEED FAILED",error);return;}
     if(!ps5::demo::nes::load_rom(*nes,generated_path)){open_message("ROM LOAD FAILED",nes->error);return;}
-    std::snprintf(run_label,sizeof(run_label),"TREASURE V1 / %08X",seed_library.entries[seed_slot].seed);
+    std::snprintf(run_label,sizeof(run_label),"%s / %08X / %02X",(seed_library.entries[seed_slot].flags&2)?"CUSTOM V1":"TREASURE V1",seed_library.entries[seed_slot].seed,seed_library.entries[seed_slot].flags);
     screen=Screen::gameplay;pacer.reset();
 }
 
@@ -312,7 +316,7 @@ void draw_overlay(Canvas &canvas,bool bottom=true) noexcept {
     }
     canvas.text(1395,1014,nes->saved_at,2,Color::steel);
     canvas.text(1395,1037,"SQUARE OVERLAY / R1 PAUSE",2,Color::steel);
-    canvas.text(1395,1055,nes->records_saved?"L3 + R3 MENU / TEST 13":"BEST SAVE FAILED",2,nes->records_saved?Color::steel:Color::bad);
+    canvas.text(1395,1055,nes->records_saved?"L3 + R3 MENU / TEST 14":"BEST SAVE FAILED",2,nes->records_saved?Color::steel:Color::bad);
 }
 
 void draw_message(Canvas &canvas) noexcept
@@ -349,7 +353,7 @@ void draw_frame(Canvas &canvas, const Input &input) noexcept
             switch (selection)
             {
             case 0:
-                chosen_seed=static_cast<std::uint32_t>(monotonic_us());screen=Screen::generate;break;
+                chosen_seed=static_cast<std::uint32_t>(monotonic_us());edit_options=false;screen=Screen::generate;break;
             case 1:
                 randomizer::load_library(seed_library);update_seed_stamp();screen=Screen::library;break;
             case 2:
@@ -393,6 +397,16 @@ void draw_frame(Canvas &canvas, const Input &input) noexcept
         const bool library=screen==Screen::library;
         using namespace ps5::demo::pad;
         if(input.pressed&circle)screen=Screen::menu;
+        else if(!library&&(input.pressed&square))edit_options=!edit_options;
+        else if(!library&&edit_options){
+            if(input.pressed&up)option_row=(option_row+4)%5;
+            if(input.pressed&down)option_row=(option_row+1)%5;
+            if(input.pressed&(cross|left|right)){
+                bool*values[]={&seed_options.treasure,&seed_options.major,&seed_options.shops,&seed_options.prices,&seed_options.open_magic};
+                *values[option_row]=!*values[option_row];
+                options_saved=randomizer::save_options(seed_options);
+            }
+        }
         else if(input.pressed&cross)open_seed(!library);
         else if(library){
             if(input.pressed&up)seed_slot=(seed_slot+7)%8;
@@ -460,6 +474,7 @@ int main()
                                     {reinterpret_cast<std::uint8_t *>(background),
                                      background_bytes});
     ps5::demo::read_asset_bytes("/app0/assets/overlay.raw",{reinterpret_cast<std::uint8_t*>(icon_art),sizeof(icon_art)});
+    randomizer::load_options(seed_options);
     randomizer::load_library(seed_library);
     qol::load(settings);music_enabled=settings.music!=0;
     ps5::demo::run(draw_frame);

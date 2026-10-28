@@ -91,3 +91,11 @@ commit aa507c715836a27a35e421b3f41bd61e380abbe7 (GPL-3.0).
 The native implementation retains GPL-3.0-or-later licensing. RAM and pickup
 behavior checked against aldonunez/zelda1-disassembly commit
 50a1c869a8d8e2eb8b5b60acea325f44b4341762 and the supported Rev1 ROM.
+
+## FF1 custom rules / ROM patches
+Quest reward and map dependency data and shop layout reference
+FiendsOfTheElements/FF1Randomizer e49d72e20f2dcb2c034affddce29f72d54b60d5e,
+ItemLocations.cs, Items.cs and Data/ShopData.cs. Native generation and logic do
+not implement that project's full engine or seed format. The readable 6502
+compatibility patches use documented routines/RAM symbols from
+https://github.com/Entroper/FF1Disassembly. No proprietary ROM is included in Git.
