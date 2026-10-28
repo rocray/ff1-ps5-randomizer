@@ -1,5 +1,6 @@
 #include "../src/nes/nes_core.hpp"
 #include "../src/randomizer.hpp"
+#include "../src/logic/item_logic.hpp"
 #include "../src/qol.hpp"
 #include "libretro.h"
 #include <cassert>
@@ -23,6 +24,20 @@ int main(int argc,char**argv){assert(argc==2);std::ifstream f(argv[1],std::ios::
  step(s,0x10,70);step(s,0,240);step(s,0x20,6);step(s,0x10,65);step(s,0,100);shot(s,"build/zelda/sword.ppm");
  assert(s.progress.items[0]==1&&s.progress.seen[0]==1);
  assert(audio_count>100000&&audio_nonzero);s.running=false;double t=s.progress.seconds;run_frame(s,0);assert(s.progress.seconds==t);s.running=true;save_ram(s);char stamp[64];qol::read_stamp(s.save_path,stamp,sizeof(stamp));assert(std::strstr(stamp,"UTC"));unload_rom(s);
+ // Exercise randomized starting-cave pickups in the real emulator.
+ for(unsigned seed=0;seed<24;seed++){
+  assert(zlogic::shuffle(base.data(),base.size(),seed,out.data(),error));
+  {std::ofstream rom("/tmp/z1-all-core.nes",std::ios::binary);rom.write((char*)out.data(),out.size());}
+  std::remove(s.save_path);assert(load_rom(s,"/tmp/z1-all-core.nes"));start_new(s);
+  step(s,0x80,43);step(s,0x10,90);step(s,0,120);step(s,0x10,70);step(s,0,240);step(s,0x20,6);step(s,0x10,65);step(s,0,100);
+  unsigned item=out[0x18611]&63;auto*ram=(unsigned char*)retro_get_memory_data(RETRO_MEMORY_SYSTEM_RAM);
+  constexpr unsigned addresses[]={0,0x657,0x657,0x657,0x65d,0x65c,0x65b,0x65b,0x659,0x659,0x65a,0x664,0x660,0x663,0,0,0x65f,0x661,0x662,0x662,0x665,0x666};
+  if(item==26)assert(s.progress.hearts==4);
+  else if(item<22)assert(addresses[item]&&ram[addresses[item]]!=0);
+  else if(item==28)assert(ram[0x676]);else if(item==29)assert(ram[0x674]);else if(item==30)assert(ram[0x675]);else assert(false);
+  unload_rom(s);
+ }
+ std::remove("/tmp/z1-all-core.nes");puts("PASS: 24 all-item ROMs booted and randomized cave pickups collected in FCEUmm");
  for(unsigned i=0;i<12;i++){assert(load_rom(s,path));step(s,0,10);assert(!load_rom(s,"/no/zelda.nes"));assert(s.loaded);unload_rom(s);}
  std::uint8_t ram[2048]{};ram[0x12]=5;ram[0x11]=1;ram[0x66f]=0x22;RunProgress r;sample_run(r,ram,60);sample_run(r,ram,60);assert(r.started&&!r.practice);ram[0x10]=4;ram[0x660]=1;ram[0x671]=8;assert(sample_run(r,ram,60));assert(r.reached[3]&&!r.reached[0]&&r.found_level[6]==4);double split=r.split[3];sample_run(r,ram,60);assert(r.split[3]==split);ram[0x12]=0x13;assert(sample_run(r,ram,60));assert(r.finished&&r.reached[8]);t=r.seconds;sample_run(r,ram,60);assert(r.seconds==t);RunProgress practice;ram[0x12]=5;sample_run(practice,ram,60);sample_run(practice,ram,60);assert(practice.practice);for(double best:practice.records)assert(best==0);
  std::remove(s.save_path);std::remove("/tmp/z1-sram-test.time");std::filesystem::remove_all(dir);puts("PASS: 100 seeds, byte boundaries, disk library, real core boot/title audio/registration/timer/sword pickup, pause, SRAM timestamp, 12 reloads; synthetic split/location/finish/practice tests");}

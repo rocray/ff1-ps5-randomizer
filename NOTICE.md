@@ -83,3 +83,11 @@ FiendsOfTheElements/FF1Randomizer, FF1Lib/SpeedHacks.cs, commit
 e49d72e20f2dcb2c034affddce29f72d54b60d5e (EnableDash / slowMapMove).
 Our application verifies and patches the original MMC1 ROM, not that project's
 expanded MMC3 ROM. Seeds and presets are not upstream-compatible.
+
+## Zelda item logic
+Native Zelda first-quest room/access rules and overworld access data reference
+[tetraly/zelda-randomizer](https://github.com/tetraly/zelda-randomizer),
+commit aa507c715836a27a35e421b3f41bd61e380abbe7 (GPL-3.0).
+The native implementation retains GPL-3.0-or-later licensing. RAM and pickup
+behavior checked against aldonunez/zelda1-disassembly commit
+50a1c869a8d8e2eb8b5b60acea325f44b4341762 and the supported Rev1 ROM.

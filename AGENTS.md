@@ -338,3 +338,35 @@
 - Reference FF1Randomizer e49d72e: ShopData shop pointer 0x38302, pointer base
   0x30000, PriceOffset 0x37c00, permission table 0x3ad18; these are PRG offsets.
   Research only so far; none of these functional changes is implemented yet.
+
+## Zelda Test03 — two randomizer modes (2026-10-28)
+- Square on NEW RANDOM QUEST switches original Gear (flags0) / All Items
+  (flags2). Existing catalog v1 migration and v2 gear entries preserved.
+  z1-g1-SEED.nes and z1-a1-SEED.nes separate mode paths; saves/bests hash ROM.
+- All Items means 32 permanent equipment/heart-container locations: dungeon
+  floor/stairs, sword/letter caves, shop gear, Armos and coast. Refill supplies,
+  keys/maps/compasses, Triforce, prices, take-any hearts/layouts remain fixed.
+- Native logic in ports/zelda/src/logic checks first-quest overworld gates,
+  room traversal/stairs, combat, locked doors, renewable shop resources,
+  heart-gated caves, eight Triforce pieces, Ganon/Zelda and all pool locations.
+  Requires original US Rev1 CRC eaf7ed72. Max4096 candidate attempts; reject
+  without writing on exhaustion. Original base ROM never mutated.
+- Magical Sword uses ID3, vanilla dungeon no-item sentinel also3. Full mode
+  migrates first-quest grid sentinel to14 and CMP immediate at file1785f to14,
+  following upstream Mags fix. Preserve all other flags/bytes. Rev1 pickup
+  routine already avoids downgrading stronger equipment; no speculative patch.
+- Logic assumes normal renewable rupee farming and retry/save use; not proof
+  against all player-induced traps. Never register name ZELDA: second quest
+  is outside profile. Do not advertise full upstream/tournament compatibility.
+- PASS: 1000 deterministic seeds, multiset/masks, all32 reachable, 8 Triforce,
+  Ganon/Zelda; five intentional progression deadlocks rejected; catalog/mode
+  and save isolation. ASan+UBSan passed (leak detection unsupported by host).
+  24 actual all-item ROMs booted and cave pickups acquired in FCEUmm; original
+  100-seed/core/audio/timer/SRAM/reload regression passed. Not full playthroughs.
+- Native compile/link/module mapping/signed SELF passed. UI mode preview
+  checked. Complete Test03 includes ROM/runtime/artwork. PS5 testing pending.
+- Retain PPSA01988, existing runtime shim, cached overlay, working heap/audio
+  fixes. Preserve /download0 saves. Unrelated FF1 requests remain pending.
+- Packaging Test03 reuses verified Test02 artwork bytes via --reuse-artwork.
+  Restored source icon PNG failed Pillow decoding in this workspace; do not
+  regenerate art from it until repaired. Runtime assets from Test02 are intact.
