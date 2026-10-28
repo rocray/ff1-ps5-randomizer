@@ -268,3 +268,42 @@
   movement speed 1 normally and 2 with Circle held (test_run_button.cpp).
 - Settings preview visually checked; native compile/link, mapping and SELF PASS.
   Hardware filter performance/timestamps/run option pending user validation.
+
+## Zelda Test01 — separate native app, host tested; PS5 test pending
+- FF1 Test13 source is 8e830174a0276b38f4fc04faf4fb4d69cc7eb78f. Saved complete
+  Test13 ZIP eboot SHA256 373db317683a385738cd811113f9806b89ba716a39a0bdfdb774a6f4a706db61.
+- New ports/zelda/ target PPSA01988, distinct from FF1 PPSA01987. Shared runtime
+  implementation copied at Test13; keep allocator, signed SELF libc and cached
+  tiled framebuffer fixes intact. Build with bash ports/zelda/build.sh after root
+  toolchain/startup objects/core archive are available. Native compile/link,
+  module mapping and signed SELF integrity PASS.
+- Zelda Test01 eboot SHA256 db4293c5561c3490c877efce74fd1c8906c4e559c4ad0760d617b70736646030.
+  Runtime libc SHA256 8a29784545983fffd7428446912711ec4e269672673e2d281612d3dbf4c39e88.
+- Original Zelda US Rev1 ROM is private, at /app0/rom/ZELDA.NES; PRG CRC eaf7ed72.
+  Never commit ROM. ZIP contains user's supplied ROM and known working runtime.
+- Native Dungeon Gear Shuffle v1 only: six low-five-bit optional gear fields
+  (file offsets 18954,1895f,18985,18c10,18c5a,18c7f). Progression locations remain
+  fixed. Not the full Z1 tournament randomizer or compatible seed/flag format.
+- Custom procedural title/menu/hand, original NES title audio at initial app menu,
+  gold/navy 4:3 overlay: 16 inventory fields, found dungeon, 9 milestones, visited
+  dungeon/Triforce strip and counters. Menu soundtrack does not resume after
+  returning from gameplay; it comes from the initial background NES title.
+- Timer starts after 2 stable playable mode5 frames and stops at mode13hex rescue.
+  RAM profile documented in run_tracking.hpp. Existing inventory/Triforce/quest2
+  marks practice, prevents best-time changes. Best times are independent elapsed
+  milestone minima per ROM, not a full PB-run comparison. Location history is
+  in-memory; resumed items show unknown rather than inventing locations.
+- /download0/z1.srm original, z1-<ROM hash>.srm generated; .time UTC timestamps,
+  z1-best-<hash>.bin records, z1-seeds-v1.bin library, z1-settings-v1.bin settings.
+  Saves are SRAM, not savestates. L3+R3 writes SRAM and returns to app menu.
+- Host PASS: 100 deterministic seeds, only six permitted fields change, gear
+  multiset/room flags preserved, disk catalog/readback, rejected modified base,
+  6000 title frames without timer start, actual new-game registration and cave
+  sword pickup updating inventory, audio, pause, SRAM timestamps, 12 core reloads.
+  Synthetic RAM tests cover nonlinear Triforce split, acquisition dungeon,
+  rescue finish and practice best-time protection. No full-playthrough claim.
+- Native menu/overlay visually rendered. Launcher BC7/PNG assets validated;
+  complete ZIP CRC verified. PS5 launch, audio/performance and dungeon behavior
+  remain user validation. Use separate PPSA01988 folder; never overwrite FF1.
+- Source references: tetraly/zelda-randomizer aa507c7 item table layout;
+  aldonunez/zelda1-disassembly 50a1c86 RAM symbols. Independently implemented preset.
