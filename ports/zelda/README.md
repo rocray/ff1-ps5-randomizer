@@ -1,4 +1,4 @@
-# Zelda Randomizer PS5 — Test 01
+# Zelda Randomizer PS5 — Test 02
 
 Separate PS5 title PPSA01988. Extract the complete ZIP, select its PPSA01988 folder
 in PS5Upload, upload to /data/homebrew/PPSA01988 and register on the home screen.
@@ -6,8 +6,8 @@ Do not overwrite FF1's PPSA01987 folder. Both executable and libc.prx are signed
 SELF containers, preserving the confirmed FF1 launch fix.
 
 ## Included
-- Custom native title screen, original NES title audio while the initial menu is open,
-  a launcher icon and backgrounds. No home-screen selection music is included.
+- Illustrated Hyrule title screen, original NES title audio while the initial menu is open,
+  the approved illustrated launcher icon and backgrounds. No home-screen selection music is included.
 - NES FCEUmm emulator with the working FF1 allocation, video, pacing and audio fixes.
 - 4:3 by default; settings for integer pixels/wide, scanlines and mild CRT curvature.
 - Live inventory, acquisition dungeon (OW = overworld, -- = unknown), dungeon visits,
@@ -47,3 +47,13 @@ References: tetraly/zelda-randomizer (aa507c7) room item-table format;
 aldonunez/zelda1-disassembly (50a1c86) RAM symbols/mode table. Native preset is
 independently implemented; no full upstream randomizer engine is included.
 GPL-3.0-or-later application; FCEUmm retains its own repository license notices.
+
+## Test02 artwork update
+The approved title, icon and overlay concepts are integrated. Menu actions,
+timer, seed label, inventory, acquisition locations, splits and dungeon badges
+are rendered live. Sample mockup gameplay and stats are covered. The NES image
+remains original and 4:3 by default; integer and wide settings are retained.
+Static overlay artwork is cached in tiled RAM once; dynamic content renders over
+it. Host overlay render measurement: about 2.5 ms/frame (not PS5 measurement).
+Use the full PPSA01988 folder, including assets/title.raw and assets/overlay.raw.
+Save/resume behavior is unchanged from Test01; this is the graphics update.

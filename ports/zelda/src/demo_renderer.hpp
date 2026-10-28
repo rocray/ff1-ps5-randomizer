@@ -76,6 +76,9 @@ using Frame = void (*)(Canvas &, const Input &) noexcept;
 class Canvas final
 {
   public:
+    static constexpr std::size_t tile_words=15*9*65536/4;
+    void copy_tiles(std::uint32_t *out) const noexcept;
+    void restore_tiles(const std::uint32_t *source) noexcept;
     void clear(Color color) noexcept;
     void rectangle(unsigned x, unsigned y, unsigned width, unsigned height, Color color) noexcept;
     void circle(unsigned center_x, unsigned center_y, unsigned radius, Color color) noexcept;

@@ -433,6 +433,8 @@ void present_pixels(void *destination) noexcept
 
 } // namespace
 
+void Canvas::copy_tiles(std::uint32_t *out) const noexcept {std::memcpy(out,pixels_,tile_words*4);}
+void Canvas::restore_tiles(const std::uint32_t *source) noexcept {std::memcpy(pixels_,source,tile_words*4);}
 void Canvas::clear(Color color) noexcept
 {
     fill_rect(pixels_, 0, 0, frame_width, frame_height, color);
