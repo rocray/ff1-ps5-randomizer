@@ -156,3 +156,115 @@ shop_full:
  LDA #$0c
  JSR $aa5b
  JMP $a481
+
+.group slot_prices
+; Preserve global item/resale prices. Buy-list price tokens use a parallel list
+; of ORIGINAL slot item IDs. 0340..0345 is outside shop str_buf (0300..0338)
+; and below palette memory (03C0); rebuilt whenever inventory is loaded.
+.bank $0f
+.org $ecb9
+.limit $ecd0
+ PHA
+ LDA #$0d
+ JSR $fe03
+ PLA
+ JSR global_price
+price_return:
+ LDA #$0e
+ JMP $fe03
+.org $ecd0
+.limit $ecda
+load_slot_prices:
+ LDA #$0d
+ JSR $fe03
+ JMP slot_price_list
+.bank $0d
+; Disassembly documents B5C9..B7FF as unused. Use B600..B7E2 only.
+.org $b600
+.limit $b640
+global_price:
+ ASL A
+ STA $12
+ LDA #$5e
+ ROL A
+ STA $13
+ LDY #$00
+ LDA ($12),Y
+ STA $10
+ INY
+ LDA ($12),Y
+ STA $11
+ LDA #$00
+ STA $12
+ RTS
+.org $b640
+.limit $b680
+slot_price_list:
+ LDA #$00
+ STA $0305
+ STA $11
+ LDA $51
+ ASL A
+ ASL A
+ ROL $11
+ CLC
+ ADC $51
+ STA $10
+ LDA $11
+ ADC #$b6
+ STA $11
+ LDA $10
+ CLC
+ ADC #$80
+ STA $10
+ BCC slot_pointer_ready
+ INC $11
+slot_pointer_ready:
+ LDY #$04
+slot_copy:
+ LDA ($10),Y
+ STA $0340,Y
+ DEY
+ BPL slot_copy
+ LDA #$01
+ STA $0345
+ JMP price_return
+.bank $0e
+.org $a7e9
+.limit $a7ef
+ JMP load_slot_prices
+; Change only the price token; the name token still identifies the bought item.
+; 8467..847F is FF padding after the final shop and before copyright text.
+.org $a867
+.limit $a86a
+ JSR slot_price_token
+.org $8467
+.limit $8480
+slot_price_token:
+ LDA $0345
+ BEQ sale_price_token
+ LDA $0340,X
+ BNE store_price_token
+sale_price_token:
+ LDA $0300,X
+store_price_token:
+ STA $0316,Y
+ RTS
+; Sell list uses ordinary item prices; its confirmation still halves that price.
+.org $a806
+.limit $a809
+ JSR selling_prices
+.org $84f8
+.limit $8500
+selling_prices:
+ LDA #$00
+ STA $0345
+ TAY
+ RTS
+; Confirmation: item ID from name token, price ID from price token.
+.org $aa7e
+.limit $aa81
+ LDA $02fb,X
+.org $aa88
+.limit $aa8b
+ LDA $0300,X

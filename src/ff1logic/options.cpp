@@ -42,12 +42,11 @@ void shops(std::uint8_t*r,Rng&rng){
   if(num==8){rng.mix(spells,8);for(unsigned j=0;j<8;j++)r[positions[j]]=spells[j];}
  }
  for(auto&p:shops_patches)std::memcpy(r+p.offset,p.data,p.size);
- price(r,29,5);price(r,30,5);price(r,68,10);
 }
 void prices(std::uint8_t*r,Rng&rng){
  for(unsigned start:{22u,28u,68u}){unsigned n=start==22?6:40;unsigned values[40];for(unsigned j=0;j<n;j++)values[j]=price(r,start+j);rng.mix(values,n);for(unsigned j=0;j<n;j++)price(r,start+j,values[j]);}
  // Preserve an affordable opening and recurring healing supplies.
- price(r,29,5);price(r,30,5);price(r,68,10);
+ price(r,28,10);price(r,29,5);price(r,30,5);price(r,68,10);
  price(r,25,30+rng.pick(121));price(r,26,10+rng.pick(66));price(r,15,1000+rng.pick(59001));
 }
 }
@@ -86,8 +85,15 @@ bool shuffle(const std::uint8_t*base,std::size_t size,std::uint32_t seed,std::ui
   for(unsigned attempt=0;attempt<16384;attempt++){std::memcpy(pool,original,16);rng.mix(pool,16);set_major(out,pool);if(validate(out).beatable){valid=true;break;}}
   if(!valid){error="NO BEATABLE ITEM PLACEMENT - TRY ANOTHER SEED";return false;}
  }
- if(options.shops){Rng rng{seed^0x73686f70u};shops(out,rng);}
- if(options.prices){Rng rng{seed^0x70726963u};prices(out,rng);}
+ if(options.shops){
+  Rng rng{seed^0x73686f70u};shops(out,rng);
+  for(auto&p:slot_prices_patches)std::memcpy(out+p.offset,p.data,p.size);
+  // shop_id is ONE based. Price tokens reference the original global price
+  // table, independently of the shuffled item name/reward in the same slot.
+  std::memset(out+0x37690,0,355);
+  for(unsigned n=0;n<70;n++){unsigned at=shop(base,n);for(unsigned j=0;j<5;j++)out[0x37690+(n+1)*5+j]=base[at+j];}
+ }
+ if(options.shops&&options.prices){Rng rng{seed^0x70726963u};prices(out,rng);}
  // Permission bit set means forbidden. Learning is open; MP growth is unchanged.
  if(options.open_magic)std::memset(out+0x3ad28,0,96);
  if(!validate(out,options.major).beatable){error="PROGRESSION CHECK FAILED";return false;}

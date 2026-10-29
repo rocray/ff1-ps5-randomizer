@@ -416,3 +416,40 @@
 - Shop requests above are now implemented. Exact save-state/timer resume and
   overall best completed-run history across seeds remain pending, unchanged.
 - Test14 eboot SHA256 3ea1ed26bf2223b7f0aca4c7dff2bf65236cfd56399c200c72dd787b609dd291.
+
+## FF1 Test15 — shop-slot prices (2026-10-29)
+- User correction: Shuffle Prices must be a child of Shop Stock + Magic.
+  Turning the parent off clears/disables the child; settings load and generation
+  normalize inconsistent flags. The child is indented; footer identifies TEST 15.
+- OFF means ORIGINAL SLOT purchase price, not the replacement item's global
+  price. Identical replacements may cost different amounts in different shops.
+  No global price-table writes when off. ON keeps the independent price stream;
+  cap original Coneria slot price IDs28/29/30/68 for affordable starter coverage.
+  Magic level prices and inn/clinic costs are unchanged. Resale remains the
+  original global-table/2 behavior; cheap equipment can yield resale profit.
+- ROM implementation: parallel original slot item IDs, one-based shop_id, at
+  bank0D B680..B7E2. Code B600..B67F is in documented unused B5C9..B7FF space.
+  Fixed-bank ECB9 preserves LoadPrice semantics via the bank0D helper; ECD0
+  loads parallel price tokens at RAM0340..0344, with mode flag0345. This is above
+  shop str_buf0300..0338 and below palette03C0, rebuilt on inventory load.
+- Buy-list name/reward tokens remain shuffled IDs; price tokens use original IDs.
+  Confirmation reads name and price separately. Sell-list entry clears the mode
+  and continues ordinary item-table pricing. Shop padding8467..847F and
+  84F8..84FF hold small hooks. No ROM expansion or core memory writes needed.
+- Assembler now understands bank-specific offsets, rejects out-of-range branches
+  and overlapping patch blocks. Header regenerated from readable assembly.
+- New custom flag bit7 denotes Custom v2 / ff1-c2-SEED-FLAGS.nes. Retain legacy
+  flags0/1 and c1 paths/catalog entries unchanged. Same numeric seed never
+  overwrites an old c1 ROM. Saves/bests continue to follow full ROM content hash.
+- Host validation: 1000 deterministic seeds, 32 checkbox combinations, progression
+  deadlock regressions, slot table/global price preservation, disabled-parent
+  normalization, old/new catalog selection, and ASan/UBSan. py65 executes real
+  bank-switched lookup/list/confirmation/affordability/payment/sell-reset paths;
+  all256 global prices, ordinary shops/caravan and all64 magic slots covered.
+  Existing NPC/reward/learning patches and FCEUmm boot/audio/timer regressions pass.
+- Preserve working native allocator, audio, pacing, signed runtime and all private
+  assets from complete Test14. Native mapping/SELF checks pass. Hardware test
+  remains pending; do not label PS5-verified or merged. Zelda unchanged.
+- Complete Test15 eboot SHA256:
+  148990c9a7ecd050276c20c2ff3b839954849701f12acd29dbae72b78899d28a.
+  ZIP SHA256 e18c11236939f756e4c4151731baa46d574c36d86d7883059217dd6ac75bdb4b.

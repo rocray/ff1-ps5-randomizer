@@ -14,6 +14,8 @@ int main(int argc,char**argv){assert(argc==2);std::ifstream f(argv[1],std::ios::
  for(unsigned i=0x3110;i<0x3210;i++)allowed[i]=true;
  for(unsigned i=0x3839f;i<0x38477;i++)allowed[i]=true;
  for(auto&p:ff1logic::major_patches)for(unsigned j=0;j<p.size;j++)allowed[p.offset+j]=true;
+ for(auto&p:ff1logic::slot_prices_patches)for(unsigned j=0;j<p.size;j++)allowed[p.offset+j]=true;
+ for(unsigned i=0x37690;i<0x377f3;i++)allowed[i]=true;
  for(auto&p:ff1logic::shops_patches)for(unsigned j=0;j<p.size;j++)allowed[p.offset+j]=true;
  for(unsigned i=22;i<108;i++)allowed[0x37c10+i*2]=allowed[0x37c11+i*2]=true;
  allowed[0x37c10+30]=allowed[0x37c11+30]=true;
@@ -34,6 +36,8 @@ int main(int argc,char**argv){assert(argc==2);std::ifstream f(argv[1],std::ios::
   ff1logic::Options o{bool(bits&1),bool(bits&2),bool(bits&4),bool(bits&8),bool(bits&16)};assert(ff1logic::shuffle(base.data(),base.size(),77,a.data(),o,error));assert(ff1logic::validate(a.data(),o.major).beatable);
   if(!o.major){unsigned char p[16],q[16];ff1logic::read_major(base.data(),p,false);ff1logic::read_major(a.data(),q,false);assert(!std::memcmp(p,q,16));}
   if(!o.shops)for(unsigned n=0;n<69;n++){auto at=shop(base,n);for(unsigned j=0;j<5&&base[at+j];j++)assert(base[at+j]==a[at+j]);}
+  if(!o.shops||!o.prices)assert(!std::memcmp(a.data()+0x37c10,base.data()+0x37c10,512));
+  if(o.shops)for(unsigned n=0;n<70;n++)for(unsigned j=0;j<5;j++)assert(a[0x37690+(n+1)*5+j]==base[shop(base,n)+j]);
   if(!bits)assert(a==base);
  }
  ff1logic::Options all{true,true,true,true,true};assert(ff1logic::shuffle(base.data(),base.size(),123,a.data(),all,error));
@@ -43,7 +47,17 @@ int main(int argc,char**argv){assert(argc==2);std::ifstream f(argv[1],std::ios::
   constexpr unsigned offsets[]={0x3113,0x312c,0x314d,0x3182,0x3193,0x31c4,0x31f9,0x30011+ff1logic::princess_item,0x30011+ff1logic::astos_item,0x30011+ff1logic::matoya_item,0x30011+ff1logic::elf_item,0x30011+ff1logic::sarda_item,0x30011+ff1logic::cube_item,0x30011+ff1logic::fairy_item,0x30011+ff1logic::chime_item,0x38471};
   b=a;std::swap(b[offsets[from]],b[offsets[target]]);assert(!ff1logic::validate(b.data()).beatable);
  }
- const char*dir="/tmp/ff1-options-test";std::filesystem::create_directories(dir);assert(randomizer::save_options(all,dir));ff1logic::Options persisted;assert(randomizer::load_options(persisted,dir)&&ff1logic::flags(persisted)==126);randomizer::Library l;char path[256],first[256];assert(randomizer::generate(argv[1],123,0,l,path,sizeof(path),error,dir));std::snprintf(first,sizeof(first),"%s",path);assert(randomizer::generate(argv[1],123,1,l,path,sizeof(path),error,dir,true,&all));assert(std::strcmp(first,path));randomizer::Library read;assert(randomizer::load_library(read,dir)&&read.entries[1].flags==127);assert(randomizer::select(read,0,path,sizeof(path),error,dir));assert(randomizer::select(read,1,path,sizeof(path),error,dir));
+ const char*dir="/tmp/ff1-options-test";std::filesystem::create_directories(dir);assert(randomizer::save_options(all,dir));ff1logic::Options persisted;assert(randomizer::load_options(persisted,dir)&&ff1logic::flags(persisted)==254);randomizer::Library l;char path[256],first[256];assert(randomizer::generate(argv[1],123,0,l,path,sizeof(path),error,dir));std::snprintf(first,sizeof(first),"%s",path);assert(randomizer::generate(argv[1],123,1,l,path,sizeof(path),error,dir,true,&all));assert(std::strcmp(first,path));randomizer::Library read;assert(randomizer::load_library(read,dir)&&read.entries[1].flags==255);assert(randomizer::select(read,0,path,sizeof(path),error,dir));assert(randomizer::select(read,1,path,sizeof(path),error,dir));
  {std::ofstream rom("build/ff1-options-test.nes",std::ios::binary);rom.write((char*)a.data(),a.size());}
+ // Preserve c1 catalog paths and files rather than silently rerolling old seeds.
+ read.entries[2]={456,randomizer::crc32(base.data(),base.size()),126};
+ {std::ofstream old(std::string(dir)+"/ff1-c1-000001c8-7e.nes",std::ios::binary);old.write((char*)base.data(),base.size());}
+ assert(randomizer::select(read,2,path,sizeof(path),error,dir));assert(std::strstr(path,"ff1-c1-"));
+ ff1logic::Options no_shop{true,false,false,true,false},prices_off=no_shop;prices_off.prices=false;
+ assert(ff1logic::flags(no_shop)==ff1logic::flags(prices_off));
+ assert(randomizer::save_options(no_shop,dir));assert(randomizer::load_options(persisted,dir)&&!persisted.prices);
+ assert(ff1logic::shuffle(base.data(),base.size(),123,a.data(),no_shop,error));assert(ff1logic::shuffle(base.data(),base.size(),123,b.data(),prices_off,error));assert(a==b);
+ all.prices=false;assert(ff1logic::shuffle(base.data(),base.size(),123,a.data(),all,error));
+ {std::ofstream rom("build/ff1-slot-prices-off.nes",std::ios::binary);rom.write((char*)a.data(),a.size());}
  std::filesystem::remove_all(dir);printf("PASS: 1000 deterministic all-option seeds, 32 checkbox combinations, 11 forced deadlocks, spell levels/pool, refill safeguards, legacy/custom catalog. Max spheres %u, %.2fs\n",worst,std::chrono::duration<double>(std::chrono::steady_clock::now()-start).count());
 }
