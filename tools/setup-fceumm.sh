@@ -31,6 +31,10 @@ p=Path(sys.argv[1])/'src/drivers/libretro/libretro.c'
 s=p.read_text()
 new="unsigned char ff1_read_cpu(unsigned address) { if(!((address >= 0x6000 && address <= 0x6035) || address==0x42 || address==0x4b || address==0x6a || address==0x610a || address==0x610b || address==0x6b86)) return 0; return ARead[address](address); }"
 s=re.sub(r'unsigned char ff1_read_cpu\(unsigned address\) \{[^\n]*\}',new,s)
+# The PS5 shim fails large malloc requests; use the proven reserved calloc path.
+s=s.replace('(uint8_t*)malloc(1000000)', '(uint8_t*)calloc(1, 1000000)')
+# Do not report success when the core failed to produce a complete state.
+s=s.replace('FCEUSS_Save_Mem(data, size);\n   return true;', 'return FCEUSS_Save_Mem(data, size) == size;')
 p.write_text(s)
 PYUPDATE
 

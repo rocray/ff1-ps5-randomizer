@@ -19,6 +19,8 @@ struct NesState {
     char records_path[128]{};
     bool records_saved=true;
     char saved_at[64]="NO TIMESTAMP";
+    char run_label[96]="ORIGINAL FF1";
+    bool snapshot_saved=true,save_allowed=true;
     const char *error="";
     char core_message[160]{};
     unsigned frames=0;
@@ -26,6 +28,10 @@ struct NesState {
     const char *save_path="/download0/ff1.srm";
 };
 bool load_rom(NesState &,std::string_view);
+bool load_rom_data(NesState &,const std::uint8_t *,std::size_t);
+bool save_run(NesState &);
+bool resume_if_available(NesState &);
+bool resume_latest(NesState &,const char *directory="/download0");
 void run_frame(NesState &,std::uint32_t);
 void save_ram(NesState &);
 void unload_rom(NesState &);

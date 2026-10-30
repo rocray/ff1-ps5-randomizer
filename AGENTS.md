@@ -453,3 +453,39 @@
 - Complete Test15 eboot SHA256:
   148990c9a7ecd050276c20c2ff3b839954849701f12acd29dbae72b78899d28a.
   ZIP SHA256 e18c11236939f756e4c4151731baa46d574c36d86d7883059217dd6ac75bdb4b.
+
+## FF1 Test16 — exact persistent run checkpoints (2026-10-29)
+- User asked to proceed assuming Test15 works; this is an assumption, not a new
+  confirmed PS5 hardware result. Preserve Test15 source/features and runtime.
+- src/nes/run_snapshot.cpp writes one versioned CRC-protected envelope with ROM,
+  FCEUmm serialized state, framebuffer, tracker clock/history, splits, frozen PB
+  baseline, current records, orb/practice/finished/paused flags and run label.
+  Separate static read/write/rollback arenas avoid PS5 large allocator problems.
+- Each SRAM path gets .resume; ff1-last-run.bin in the same save directory points
+  to the latest checkpoint. Both writes are temp+fsync+rename. Never checkpoint
+  an idle title screen over a playable run. Autosave every1800 emulated frames,
+  on completion, L3+R3, and before unloading/switching a played ROM. Failed save
+  prevents a requested ROM switch. Corrupt snapshots fail before core mutation;
+  failed unserialize rolls the current core back or disables saving if rollback
+  fails. SRAM remains separate. Latest checkpoint carries its own ROM bytes.
+- CONTINUE RUN survives process restart. Selecting a saved seed/original resumes
+  that ROM's checkpoint. Paused saves remain paused. No offline/menu time added;
+  framebuffer restored without running an extra frame. Input/pacer resets.
+- Frozen delta baseline is restored exactly. More recent best records on disk
+  merge by minima, never roll back; record writes now use atomic replacement.
+  Overall completed-run/PB history across all seeds remains pending.
+- Pin checkpoint core format0xAC0D0001 to ac0d00a. setup-fceumm replaces the
+  core's 1MB serialization scratch malloc with calloc (reserved heap path), and
+  checks FCEUSS_Save_Mem's actual size rather than unconditional success.
+  Rebuild BOTH host and PS5 archives after this setup change.
+- Host PASS: cold restart restores exact framebuffer/RAM/timer/history/splits/
+  frozen baseline; deterministic90-frame replay, consumed items, paused/practice/
+  completion flags, invalid checksum/truncation/wrong-ROM rejection, failed write.
+  Existing100-seed/24reload ROM/audio/SRAM regression and32 checkbox core boot
+  tests pass, plus actual6502 price/NPC/learning and1000 progression seeds.
+- Native signed SELF/module mapping pass. Complete Test16 retains all Test15
+  ROM/music/art/runtime bytes except eboot and guide. PS5 testing pending.
+- Legacy SRAM cannot reconstruct an old timer or exact position; first resumed
+  legacy progress remains practice. Keep /download0 and PPSA01987; Zelda untouched.
+- Test16 eboot SHA256 3fb9579f15b03d89e69be123ad44cdfb08f565dafb7fe839f53b9806675fe535.
+  Complete ZIP SHA256 fedfd65e278940e5a216af171ef5db31f0110d535b7daeb5ad0b44bea2a64238.

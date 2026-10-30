@@ -14,7 +14,7 @@ extern "C" { int open(const char *, int, ...); long read(int, void *, std::size_
 namespace ps5::demo::nes {
 static NesState *owner=nullptr; // libretro is a single-instance API
 void save_ram(NesState &s) {
-    if(!s.loaded)return;
+    if(!s.loaded||!s.save_allowed)return;
     auto *p=retro_get_memory_data(RETRO_MEMORY_SAVE_RAM);
     auto n=retro_get_memory_size(RETRO_MEMORY_SAVE_RAM);
     if(!p || !n)return;
@@ -28,7 +28,7 @@ void save_ram(NesState &s) {
     else {if(qol::stamp_save(s.save_path))qol::read_stamp(s.save_path,s.saved_at,sizeof(s.saved_at));else std::snprintf(s.saved_at,sizeof(s.saved_at),"SAVED / CLOCK UNAVAILABLE");}
 }
 void unload_rom(NesState &s) {
-    if(owner==&s){save_ram(s);retro_unload_game();retro_deinit();owner=nullptr;}
+    if(owner==&s){save_run(s);retro_unload_game();retro_deinit();owner=nullptr;}
     delete[] s.rom;delete[] s.framebuffer;s.rom=nullptr;s.framebuffer=nullptr;
     s.rom_size=0;s.loaded=s.running=false;
 }
@@ -54,14 +54,21 @@ bool load_rom(NesState &s,std::string_view path) {
     }
     close(fd);
     if(!ok||!randomizer::validate_nes(candidate,size)){s.error="INVALID OR UNSUPPORTED NES ROM";return false;}
+    return load_rom_data(s,candidate,static_cast<std::size_t>(size));
+}
+bool load_rom_data(NesState &s,const std::uint8_t *candidate,std::size_t size) {
+    if(owner && owner!=&s){s.error="CORE ALREADY IN USE";return false;}
+    if(!randomizer::validate_nes(candidate,size)){s.error="INVALID OR UNSUPPORTED NES ROM";return false;}
+    if(s.loaded&&s.save_allowed&&s.progress.started&&!save_run(s))return false;
     unload_rom(s);
+    s.save_allowed=true;s.snapshot_saved=true;
     s.rom=new(std::nothrow) std::uint8_t[size];
     s.framebuffer=new(std::nothrow) std::uint32_t[256*240]{};
     if(!s.rom||!s.framebuffer){unload_rom(s);s.error="ROM BUFFER ALLOCATION FAILED";return false;}
     std::memcpy(s.rom,candidate,size);
     FILE *f=nullptr;
     ff1_heap_reset();s.core_message[0]=0;s.rom_size=static_cast<std::size_t>(size);init_core_glue(&s);retro_init();
-    retro_game_info info{filename,s.rom,s.rom_size,nullptr};
+    retro_game_info info{"/app0/resume.nes",s.rom,s.rom_size,nullptr};
     if(!retro_load_game(&info)){retro_deinit();unload_rom(s);s.error=ff1_heap_error()?ff1_heap_error():(s.core_message[0]?s.core_message:"CORE REJECTED ROM (NO DETAIL)");return false;}
     owner=&s;s.loaded=s.running=true;s.timer_armed=false;s.frames=0;s.buttons=0;s.error="";
     tracker_reset(&s.tracker);s.progress={};
@@ -85,6 +92,7 @@ bool load_rom(NesState &s,std::string_view path) {
 }
 void run_frame(NesState &s,std::uint32_t buttons) {
     if(owner!=&s || !s.loaded || !s.running)return;
+    const bool was_finished=s.progress.finished;
     s.buttons=buttons;retro_run();++s.frames;
     auto &r=s.progress;
     if(!r.started) {
@@ -111,7 +119,7 @@ void run_frame(NesState &s,std::uint32_t buttons) {
             if(changed)s.records_saved=save_records(s.records_path,s.rom_id,r.records);
         }
     }
-    if(s.frames%1800==0)save_ram(s);
+    if(s.frames%1800==0||(!was_finished&&r.finished))save_run(s);
 }
 }
 

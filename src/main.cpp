@@ -127,7 +127,7 @@ void draw_button_footer(Canvas &canvas) noexcept
     canvas.text(115,1018,"SELECT",4,Color::white);
     canvas.circle(322,1030,20,Color::steel);canvas.circle(322,1030,14,Color::bad);
     canvas.text(360,1018,"BACK",4,Color::white);
-    canvas.text(1370,1020,"DISPLAY OPTIONS / TEST 15",3,Color::steel);
+    canvas.text(1370,1020,"DISPLAY OPTIONS / TEST 16",3,Color::steel);
 }
 
 void draw_title(Canvas &canvas) noexcept
@@ -162,7 +162,7 @@ void draw_help(Canvas &canvas) noexcept
       "DELTA COMPARES WITH YOUR BEST SPLIT","DIM TIMES SHOW YOUR PREVIOUS BEST",
       "ITEM ICONS LIGHT UP WHEN ACQUIRED","QUEST PROGRESS AT START = PRACTICE",
       "PRACTICE DOES NOT REPLACE YOUR BEST","R1 PAUSES GAME AND TIMER",
-      "SQUARE SHOWS / HIDES THE OVERLAY","L3 + R3 SAVES SRAM AND OPENS MENU",
+      "SQUARE SHOWS / HIDES THE OVERLAY","L3 + R3 SAVES RUN AND OPENS MENU",
       "OPTIONS = NES START / TOUCH = SELECT"};
     for(unsigned i=0;i<13;i++)canvas.text(805,385+i*38,lines[i],3,i?Color::white:Color::gold);
     canvas.text(805,910,"O BACK TO MENU",3,Color::steel);
@@ -189,14 +189,14 @@ void draw_menu(Canvas &canvas) noexcept
         {"PRESET: TREASURE SHUFFLE V1","QUEST ITEMS STAY IN PLACE","GENERATES HERE ON YOUR PS5","NEW SEEDS / SEPARATE SAVES"},
         {"EIGHT SAVED SEED SLOTS","PLAY A PREVIOUS RANDOM ROM","SAVES ARE UNIQUE TO EACH ROM","NO NETWORK REQUIRED"},
         {"MODE: ORIGINAL FF1","TIMER: AUTO AT OVERWORLD","YOUR ORIGINAL SAVE IS KEPT","ROM: FF1.NES"},
-        {"RESUME THIS APP SESSION","YOUR CLOCK AND ITEMS REMAIN","L3 + R3 RETURNS TO MENU",""},
+        {"EXACT RESUME AFTER RESTART","GAME + TIMER + SPLITS + ITEMS","AUTO SAVE EVERY 30 SECONDS","L3 + R3 SAVES BEFORE EXIT"},
         {"SCREEN LAYOUT / SCANLINES","CRT CURVE / TITLE MUSIC","RUN BUTTON FOR NEW ROMS",settings_saved?"SETTINGS SAVED":"SETTINGS SAVE FAILED"},
         {"TIMER / SPLITS / ITEMS","VIEW THE OVERLAY GUIDE","SQUARE: TOGGLE GAME OVERLAY","R1: PAUSE   L3 + R3: MENU"}
     };
     for(unsigned i=0;i<4;i++)canvas.text(820,590+i*43,details[selection][i],3,Color::white);
     canvas.rectangle(810,785,540,2,Color::white);
     canvas.rectangle(810,810,540,70,Color::white);canvas.rectangle(816,816,528,58,static_cast<Color>(0xffff3018));
-    const char *actions[]={"CHOOSE SEED","OPEN LIBRARY","PLAY ORIGINAL",nes&&nes->loaded?"CONTINUE RUN":"NO ACTIVE RUN","OPEN SETTINGS","OPEN GUIDE"};
+    const char *actions[]={"CHOOSE SEED","OPEN LIBRARY","PLAY ORIGINAL","CONTINUE RUN","OPEN SETTINGS","OPEN GUIDE"};
     canvas.text_centered(1080,835,actions[selection],4,Color::white);
 }
 
@@ -265,6 +265,9 @@ void open_seed(bool create) noexcept {
     if(!ok){open_message("SEED FAILED",error);return;}
     if(!ps5::demo::nes::load_rom(*nes,generated_path)){open_message("ROM LOAD FAILED",nes->error);return;}
     std::snprintf(run_label,sizeof(run_label),"%s / %08X / %02X",(seed_library.entries[seed_slot].flags&128)?"CUSTOM V2":(seed_library.entries[seed_slot].flags&2)?"CUSTOM V1":"TREASURE V1",seed_library.entries[seed_slot].seed,seed_library.entries[seed_slot].flags);
+    std::snprintf(nes->run_label,sizeof(nes->run_label),"%s",run_label);
+    if(!ps5::demo::nes::resume_if_available(*nes)){nes->save_allowed=false;nes->running=false;open_message("RESUME FAILED",nes->error);return;}
+    std::snprintf(run_label,sizeof(run_label),"%s",nes->run_label);
     screen=Screen::gameplay;pacer.reset();
 }
 
@@ -323,7 +326,7 @@ void draw_overlay(Canvas &canvas,bool bottom=true) noexcept {
     }
     canvas.text(1395,1014,nes->saved_at,2,Color::steel);
     canvas.text(1395,1037,"SQUARE OVERLAY / R1 PAUSE",2,Color::steel);
-    canvas.text(1395,1055,nes->records_saved?"L3 + R3 MENU / TEST 15":"BEST SAVE FAILED",2,nes->records_saved?Color::steel:Color::bad);
+    canvas.text(1395,1055,nes->records_saved?"L3 + R3 MENU / TEST 16":"BEST SAVE FAILED",2,nes->records_saved?Color::steel:Color::bad);
 }
 
 void draw_message(Canvas &canvas) noexcept
@@ -366,7 +369,9 @@ void draw_frame(Canvas &canvas, const Input &input) noexcept
             case 2:
                 if (load_available_rom())
                 {
-                    std::strcpy(run_label,"ORIGINAL FF1");screen = Screen::gameplay;
+                    std::strcpy(nes->run_label,"ORIGINAL FF1");
+                    if(ps5::demo::nes::resume_if_available(*nes)){std::snprintf(run_label,sizeof(run_label),"%s",nes->run_label);pacer.reset();screen=Screen::gameplay;}
+                    else {nes->save_allowed=false;nes->running=false;open_message("RESUME FAILED",nes->error);}
                 }
                 else
                 {
@@ -374,8 +379,8 @@ void draw_frame(Canvas &canvas, const Input &input) noexcept
                 }
                 break;
             case 3:
-                if(nes && nes->loaded) screen=Screen::gameplay;
-                else open_message("NO ACTIVE RUN", "SELECT PLAY FF1 FIRST");
+                if(nes && ((nes->loaded&&nes->save_allowed)||(!nes->loaded&&ps5::demo::nes::resume_latest(*nes)))){std::snprintf(run_label,sizeof(run_label),"%s",nes->run_label);pacer.reset();screen=Screen::gameplay;}
+                else open_message("RESUME FAILED",nes?nes->error:"OUT OF MEMORY");
                 break;
             case 4:
                 screen=Screen::settings;
@@ -450,7 +455,8 @@ void draw_frame(Canvas &canvas, const Input &input) noexcept
     {
         if (nes && nes->loaded && scaled_game) {
             if(menu_chord(input.held,input.pressed)) {
-                ps5::demo::nes::save_ram(*nes);pacer.reset();music::set_game(false);screen=Screen::menu;return;
+                bool saved=ps5::demo::nes::save_run(*nes);pacer.reset();music::set_game(false);
+                if(saved)screen=Screen::menu;else open_message("RUN SAVE FAILED",nes->error);return;
             }
             if(input.pressed & ps5::demo::pad::square)show_overlay=!show_overlay;
             if(input.pressed & ps5::demo::pad::r1){nes->running=!nes->running;pacer.reset();}
