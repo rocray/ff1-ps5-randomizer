@@ -489,3 +489,34 @@
   legacy progress remains practice. Keep /download0 and PPSA01987; Zelda untouched.
 - Test16 eboot SHA256 3fb9579f15b03d89e69be123ad44cdfb08f565dafb7fe839f53b9806675fe535.
   Complete ZIP SHA256 fedfd65e278940e5a216af171ef5db31f0110d535b7daeb5ad0b44bea2a64238.
+
+## FF1 Test17 — full magic pool (2026-10-30)
+- User correction: pool all64 white/black spells across all eight levels, rather
+  than swapping only within each level. SHOPS + ALL MAGIC now does this; separate
+  Open Spell Learning checkbox preserves choice of class restrictions.
+- Logical spell IDs stay tied to destination slots. Permute effect/animation data,
+  name pointers and battle-message indices. Destination supplies learning/storage
+  level and MP charge. Spell class permissions follow original identity unless
+  Open Spell Learning clears them; natural MP growth remains unchanged.
+- Remap enemy script spells, weapon/armor casts, confused-enemy FIRE and all13
+  out-of-battle dispatch comparisons to retain their intended effects. Fix vanilla
+  ORA-based out-of-battle slot arithmetic to ADC: slot8 otherwise aliases an
+  adjacent level when shuffled utility spells occupy it. Bounded assembler patch.
+- Independent magic RNG stream; ordinary stock/price behavior retained. Prices
+  OFF retains original destination-slot purchase price; magic always uses its
+  destination level price. No new magic-price randomization in this build.
+- Custom v3 flag256, known_flags511 and ff1-c3 filenames preserve existing c1/c2
+  ROMs/checkpoints. Existing seeds unchanged; generate NEW to use full shuffle.
+- PASS: 1000 deterministic seeds, 32 option combinations, byte whitelist,
+  progression rejection tests, each64 spell once, remapped data/references.
+  Actual6502 tests: all12 classes/64 spell permissions, all4 characters/64 slots
+  battle effect pointer and MP debit, menu routing/MP checks and real CURE heal.
+  Existing NPC/slot-price tests pass. All32 combinations boot with audio/automatic
+  timer in FCEUmm. Cold exact resume/deterministic replay passes on Test17 ROM.
+- Native compile/link/module mapping/signed SELF PASS; menu preview checked.
+  Hardware testing pending. Preserve known-good libc, heap, audio, pacing,
+  Test16 checkpoint format, /download0 and PPSA01987. Zelda unchanged.
+- Full Test17 ZIP reuses Test16 assets/runtime; only executable and guides change.
+  eboot SHA256 939736b2ea9bde15cf051384ca5c05b6e69b2936eaf2cdcfbb785f81da1bb1a5
+  ZIP SHA256 8275867b4fb3da64bc30ed932e4a248e937c6e5a133e01c5f5ab84725d53fad0
+- Overall completed-run history across all seeds remains pending.

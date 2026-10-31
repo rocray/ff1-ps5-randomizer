@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Private complete Test16 package, reusing verified Test15 assets/runtime.
-Usage: python3 tools/package-ff1-options.py /path/to/FF1-Complete-Test15.zip
+"""Private complete Test17 package, reusing verified Test16 assets/runtime.
+Usage: python3 tools/package-ff1-options.py /path/to/FF1-Complete-Test16.zip
 Never commit the output, ROM, music or runtime module to Git.
 """
 from pathlib import Path
@@ -8,8 +8,8 @@ import zipfile,sys,hashlib,zlib
 root=Path(__file__).resolve().parents[1]
 eboot=(root/'dist/PPSA01987/eboot.bin').read_bytes()
 assert eboot[:4]==bytes.fromhex('4f153d1d'), 'Expected signed SELF, never raw ELF'
-readme=(root/'docs/FF1-Test16.md').read_bytes()
-out=root.parent/'FF1-Complete-Test16.zip'
+readme=(root/'docs/FF1-Test17.md').read_bytes()
+out=root.parent/'FF1-Complete-Test17.zip'
 with zipfile.ZipFile(sys.argv[1]) as old:
  assert old.testzip() is None
  libc=old.read('PPSA01987/sce_module/libc.prx')

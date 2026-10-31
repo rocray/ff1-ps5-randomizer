@@ -127,7 +127,7 @@ void draw_button_footer(Canvas &canvas) noexcept
     canvas.text(115,1018,"SELECT",4,Color::white);
     canvas.circle(322,1030,20,Color::steel);canvas.circle(322,1030,14,Color::bad);
     canvas.text(360,1018,"BACK",4,Color::white);
-    canvas.text(1370,1020,"DISPLAY OPTIONS / TEST 16",3,Color::steel);
+    canvas.text(1370,1020,"DISPLAY OPTIONS / TEST 17",3,Color::steel);
 }
 
 void draw_title(Canvas &canvas) noexcept
@@ -240,7 +240,7 @@ void draw_seed_screen(Canvas &canvas,bool library) noexcept {
         canvas.text(155,690,"D-PAD EDIT SEED",3,Color::steel);
         canvas.text(155,735,"TRIANGLE ROLL",3,Color::steel);
         canvas.text(155,780,"L1 / R1 SLOT",3,Color::steel);
-        const char*labels[]={"TREASURE SHUFFLE","MAJOR ITEM SHUFFLE","SHOP STOCK + MAGIC","SHUFFLE PRICES","OPEN SPELL LEARNING"};
+        const char*labels[]={"TREASURE SHUFFLE","MAJOR ITEM SHUFFLE","SHOPS + ALL MAGIC","SHUFFLE PRICES","OPEN SPELL LEARNING"};
         bool values[]={seed_options.treasure,seed_options.major,seed_options.shops,seed_options.prices,seed_options.open_magic};
         for(unsigned i=0;i<5;i++){
             unsigned y=525+i*57,x=i==3?785:755;
@@ -251,7 +251,7 @@ void draw_seed_screen(Canvas &canvas,bool library) noexcept {
             canvas.text(x+45,y+3,labels[i],3,!enabled?Color::steel:edit_options&&option_row==i?Color::gold:Color::white);
         }
         canvas.text(125,850,edit_options?"UP/DOWN CHOOSE   X TOGGLE   SQUARE SEED":"SQUARE CHECKBOXES   X GENERATE AND PLAY",3,Color::gold);
-        canvas.text(125,910,options_saved?(seed_options.shops&&seed_options.prices?"PRICES ON: SHUFFLED / MAGIC LEVEL PRICES FIXED":"PRICES OFF: KEEP ORIGINAL SHOP SLOT PRICES"):"OPTIONS SAVE FAILED / CURRENT CHOICES STILL ACTIVE",3,options_saved?Color::steel:Color::bad);
+        canvas.text(125,910,options_saved?(seed_options.shops&&seed_options.prices?"PRICES ON / MAGIC USES NEW SHOP LEVEL":"PRICES OFF: ORIGINAL SLOT PRICE / MAGIC ANY LEVEL"):"OPTIONS SAVE FAILED / CURRENT CHOICES STILL ACTIVE",3,options_saved?Color::steel:Color::bad);
     }
 }
 void open_seed(bool create) noexcept {
@@ -264,7 +264,7 @@ void open_seed(bool create) noexcept {
     }else ok=randomizer::select(seed_library,seed_slot,generated_path,sizeof(generated_path),error);
     if(!ok){open_message("SEED FAILED",error);return;}
     if(!ps5::demo::nes::load_rom(*nes,generated_path)){open_message("ROM LOAD FAILED",nes->error);return;}
-    std::snprintf(run_label,sizeof(run_label),"%s / %08X / %02X",(seed_library.entries[seed_slot].flags&128)?"CUSTOM V2":(seed_library.entries[seed_slot].flags&2)?"CUSTOM V1":"TREASURE V1",seed_library.entries[seed_slot].seed,seed_library.entries[seed_slot].flags);
+    std::snprintf(run_label,sizeof(run_label),"%s / %08X / %02X",(seed_library.entries[seed_slot].flags&256)?"CUSTOM V3":(seed_library.entries[seed_slot].flags&128)?"CUSTOM V2":(seed_library.entries[seed_slot].flags&2)?"CUSTOM V1":"TREASURE V1",seed_library.entries[seed_slot].seed,seed_library.entries[seed_slot].flags);
     std::snprintf(nes->run_label,sizeof(nes->run_label),"%s",run_label);
     if(!ps5::demo::nes::resume_if_available(*nes)){nes->save_allowed=false;nes->running=false;open_message("RESUME FAILED",nes->error);return;}
     std::snprintf(run_label,sizeof(run_label),"%s",nes->run_label);
@@ -326,7 +326,7 @@ void draw_overlay(Canvas &canvas,bool bottom=true) noexcept {
     }
     canvas.text(1395,1014,nes->saved_at,2,Color::steel);
     canvas.text(1395,1037,"SQUARE OVERLAY / R1 PAUSE",2,Color::steel);
-    canvas.text(1395,1055,nes->records_saved?"L3 + R3 MENU / TEST 16":"BEST SAVE FAILED",2,nes->records_saved?Color::steel:Color::bad);
+    canvas.text(1395,1055,nes->records_saved?"L3 + R3 MENU / TEST 17":"BEST SAVE FAILED",2,nes->records_saved?Color::steel:Color::bad);
 }
 
 void draw_message(Canvas &canvas) noexcept

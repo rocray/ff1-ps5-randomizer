@@ -34,14 +34,42 @@ void shops(std::uint8_t*r,Rng&rng){
  }
  // Guaranteed non-weapon refill availability, with all six consumables sold.
  r[shop(r,61)+3]=22;r[shop(r,62)+3]=23;r[shop(r,62)+4]=27;r[shop(r,63)+3]=24;
- // Shuffle every level's eight spells across its white/black shop slots.
- // Spell IDs/effects/levels and each town's shop level remain unchanged.
- for(unsigned level=0;level<8;level++){
-  unsigned positions[8],num=0;std::uint8_t spells[8];
-  for(unsigned n=20;n<40;n++){unsigned at=shop(r,n);for(unsigned j=0;j<count(r,at);j++)if((r[at+j]-176)/8==level){positions[num]=at+j;spells[num++]=r[at+j];}}
-  if(num==8){rng.mix(spells,8);for(unsigned j=0;j<8;j++)r[positions[j]]=spells[j];}
- }
  for(auto&p:shops_patches)std::memcpy(r+p.offset,p.data,p.size);
+}
+// Keep logical spell IDs tied to destination slots. Move the entire spell
+// identity instead, so learned slots and MP usage naturally use the new level.
+// Reference: upstream Magic.cs / EnemyScripts.cs and original disassembly.
+void magic_shuffle(const std::uint8_t*base,std::uint8_t*r,Rng&rng){
+ std::uint8_t old_at_new[64],new_of_old[64];
+ for(unsigned i=0;i<64;i++)old_at_new[i]=i;
+ rng.mix(old_at_new,64);
+ for(unsigned i=0;i<64;i++){
+  unsigned old=old_at_new[i];new_of_old[old]=i;
+  std::memcpy(r+0x301f0+i*8,base+0x301f0+old*8,8); // effect, targeting, animation
+  std::memcpy(r+0x2b870+i*2,base+0x2b870+old*2,2); // item-name pointer
+  r[0x304d0+i]=base[0x304d0+old]; // battle message
+ }
+ // Permissions follow the spell; Open Spell Learning clears them afterwards.
+ for(unsigned cls=0;cls<12;cls++)for(unsigned level=0;level<8;level++){
+  unsigned value=0;
+  for(unsigned bit=0;bit<8;bit++){unsigned old=old_at_new[level*8+bit];
+   if(base[0x3ad28+cls*8+old/8]&(0x80u>>(old%8)))value|=0x80u>>bit;
+  }
+  r[0x3ad28+cls*8+level]=value;
+ }
+ // Preserve enemy scripts and equipment spell effects, including enemy FIRE
+ // under confusion. Script skill/ability slots are a separate table, untouched.
+ for(unsigned script=0;script<44;script++)for(unsigned j=2;j<10;j++){
+  unsigned at=0x31030+script*16+j,old=base[at];if(old<64)r[at]=new_of_old[old];
+ }
+ for(unsigned i=0;i<40;i++)for(unsigned at:{0x30013+i*8,0x30153+i*4}){
+  unsigned old=base[at];if(old&&old<=64)r[at]=new_of_old[old-1]+1;
+ }
+ r[0x3322e]=new_of_old[4];
+ for(unsigned i=0;i<13;i++){
+  unsigned at=0x3af0a+i*7;r[at]=176+new_of_old[base[at]-176];
+ }
+ for(auto&p:magic_patches)std::memcpy(r+p.offset,p.data,p.size);
 }
 void prices(std::uint8_t*r,Rng&rng){
  for(unsigned start:{22u,28u,68u}){unsigned n=start==22?6:40;unsigned values[40];for(unsigned j=0;j<n;j++)values[j]=price(r,start+j);rng.mix(values,n);for(unsigned j=0;j<n;j++)price(r,start+j,values[j]);}
@@ -87,6 +115,7 @@ bool shuffle(const std::uint8_t*base,std::size_t size,std::uint32_t seed,std::ui
  }
  if(options.shops){
   Rng rng{seed^0x73686f70u};shops(out,rng);
+  Rng spell_rng{seed^0x6d616769u};magic_shuffle(base,out,spell_rng);
   for(auto&p:slot_prices_patches)std::memcpy(out+p.offset,p.data,p.size);
   // shop_id is ONE based. Price tokens reference the original global price
   // table, independently of the shuffled item name/reward in the same slot.

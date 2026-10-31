@@ -51,11 +51,11 @@ bool save_options(const ff1logic::Options &options,const char *dir){
 }
 bool load_options(ff1logic::Options &options,const char *dir){
  options={};std::uint32_t data[3]{};char path[256];std::snprintf(path,sizeof(path),"%s/ff1-randomizer-v1.bin",dir);
- if(!read_exact(path,data,sizeof(data))||data[0]!=0x314f5246||data[2]!=crc32(reinterpret_cast<const std::uint8_t*>(data),8)||!(data[1]&2)||(data[1]&~254u))return false;
+ if(!read_exact(path,data,sizeof(data))||data[0]!=0x314f5246||data[2]!=crc32(reinterpret_cast<const std::uint8_t*>(data),8)||!(data[1]&2)||(data[1]&~510u))return false;
  options={bool(data[1]&4),bool(data[1]&8),bool(data[1]&16),bool((data[1]&16)&&(data[1]&32)),bool(data[1]&64)};return true;
 }
 static std::uint32_t library_crc(const Library &l){return crc32(reinterpret_cast<const std::uint8_t*>(&l),offsetof(Library,checksum));}
-static bool rom_path(char *out,std::size_t n,const char *dir,std::uint32_t seed,unsigned flags=0){if(flags&ff1logic::custom)return std::snprintf(out,n,"%s/ff1-c%u-%08x-%02x.nes",dir,(flags&ff1logic::slot_prices_flag)?2u:1u,seed,flags)<int(n);return std::snprintf(out,n,"%s/ff1-t1-%08x%s.nes",dir,seed,(flags&1)?"-run":"")<int(n);}
+static bool rom_path(char *out,std::size_t n,const char *dir,std::uint32_t seed,unsigned flags=0){if(flags&ff1logic::custom)return std::snprintf(out,n,"%s/ff1-c%u-%08x-%02x.nes",dir,(flags&ff1logic::full_magic_flag)?3u:(flags&ff1logic::slot_prices_flag)?2u:1u,seed,flags)<int(n);return std::snprintf(out,n,"%s/ff1-t1-%08x%s.nes",dir,seed,(flags&1)?"-run":"")<int(n);}
 bool load_library(Library &l,const char *dir){
  char path[256];std::snprintf(path,sizeof(path),"%s/ff1-seeds-v1.bin",dir);Library candidate{};
  if(read_exact(path,&candidate,sizeof(candidate))&&candidate.magic==0x31525446&&candidate.version==2&&candidate.checksum==library_crc(candidate)){

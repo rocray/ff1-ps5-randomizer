@@ -268,3 +268,13 @@ selling_prices:
 .org $aa88
 .limit $aa8b
  LDA $0300,X
+
+.group magic
+.bank $0e
+; Original ORA aliases spell 8 with spell 1 of the next level outside battle.
+; Use addition with explicit carry clear; the intermediate sum is at most 64.
+.org $aef3
+.limit $aef9
+ CLC
+ ADC $6300,X
+ ADC #$af

@@ -25,6 +25,7 @@ inline constexpr std::uint8_t patch_18[]={0x20,0xf8,0x84};
 inline constexpr std::uint8_t patch_19[]={0xa9,0x0,0x8d,0x45,0x3,0xa8,0x60};
 inline constexpr std::uint8_t patch_20[]={0xbd,0xfb,0x2};
 inline constexpr std::uint8_t patch_21[]={0xbd,0x0,0x3};
+inline constexpr std::uint8_t patch_22[]={0x18,0x7d,0x0,0x63,0x69,0xaf};
 inline constexpr Patch major_patches[]={
 {0x3932e,sizeof(patch_0),patch_0},
 {0x39348,sizeof(patch_1),patch_1},
@@ -52,6 +53,9 @@ inline constexpr Patch slot_prices_patches[]={
 {0x38508,sizeof(patch_19),patch_19},
 {0x3aa8e,sizeof(patch_20),patch_20},
 {0x3aa98,sizeof(patch_21),patch_21},
+};
+inline constexpr Patch magic_patches[]={
+{0x3af03,sizeof(patch_22),patch_22},
 };
 inline constexpr unsigned elf_awake=0x9328;
 inline constexpr unsigned elf_item=0x932a;
