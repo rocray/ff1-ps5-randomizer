@@ -10,6 +10,7 @@
 #include "demo_renderer.hpp"
 
 #include <array>
+#include <cstring>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -117,6 +118,9 @@ constexpr unsigned frame_width = 1920;
 constexpr unsigned frame_height = 1080;
 constexpr std::size_t frame_bytes = 0x1000000;
 constexpr std::size_t memory_bytes = frame_bytes * 2;
+// Canvas retains the proven tile layout, but random writes now hit cached RAM.
+constexpr std::size_t tiled_bytes = ((frame_width+127)/128)*((frame_height+127)/128)*65536;
+alignas(64) std::uint32_t staging[tiled_bytes/4];
 constexpr std::size_t memory_alignment = 0x200000;
 constexpr int memory_type_wc_garlic = 3;
 constexpr int map_protection = 0x33;
@@ -158,7 +162,8 @@ struct Glyph
     std::array<std::uint8_t, 7> rows;
 };
 
-constexpr std::array<Glyph, 51> glyphs{{
+constexpr std::array<Glyph, 53> glyphs{{
+    {'+', {0, 4, 4, 31, 4, 4, 0}}, {'=', {0, 0, 31, 0, 31, 0, 0}},
     {' ', {0, 0, 0, 0, 0, 0, 0}},        {'0', {14, 17, 19, 21, 25, 17, 14}},
     {'1', {4, 12, 4, 4, 4, 4, 14}},      {'2', {14, 17, 1, 2, 4, 8, 31}},
     {'3', {30, 1, 1, 14, 1, 1, 30}},     {'4', {2, 6, 10, 18, 31, 2, 2}},
@@ -297,12 +302,13 @@ void notify(std::string_view message) noexcept
 
 [[nodiscard]] constexpr std::span<const std::uint8_t, 7> glyph_rows(char character) noexcept
 {
+    if (character >= 'a' && character <= 'z') character -= 'a' - 'A';
     for (const auto &glyph : glyphs)
     {
         if (glyph.character == character)
             return glyph.rows;
     }
-    return glyphs.front().rows;
+    return glyphs[2].rows;
 }
 
 [[nodiscard]] constexpr std::size_t tiled_byte_offset(unsigned x, unsigned y) noexcept
@@ -416,20 +422,15 @@ void draw_text(std::uint32_t *pixels, unsigned x, unsigned y, std::string_view v
     }
 }
 
-void flush_range(void *address, std::size_t length) noexcept
+void present_pixels(void *destination) noexcept
 {
+    std::memcpy(destination, staging, tiled_bytes);
 #if defined(__x86_64__)
-    auto *at = static_cast<std::uint8_t *>(address);
-    const auto *end = at + length;
-
-    for (; at < end; at += 64)
-        __asm__ volatile("clflush (%0)" : : "r"(at) : "memory");
-    __asm__ volatile("mfence" ::: "memory");
-#else
-    (void)address;
-    (void)length;
+    // Complete sequential writes to the WC VideoOut allocation before flip.
+    __asm__ volatile("sfence" ::: "memory");
 #endif
 }
+
 } // namespace
 
 void Canvas::clear(Color color) noexcept
@@ -509,6 +510,26 @@ void read_asset_bytes(const char *path, std::span<std::uint8_t> destination) noe
     }
 }
 
+void Canvas::region(unsigned x,unsigned y,unsigned w,unsigned h,const std::uint32_t *source,unsigned stride,unsigned sx,unsigned sy,unsigned sw,unsigned sh,bool dim,unsigned scanlines) noexcept
+{
+    if(!source||!w||!h||!sw||!sh||x>=frame_width||y>=frame_height)return;
+    const unsigned width=w<frame_width-x?w:frame_width-x;
+    const unsigned height=h<frame_height-y?h:frame_height-y;
+    unsigned columns[frame_width];
+    for(unsigned xx=0;xx<width;xx++)columns[xx]=sx+xx*sw/w;
+    for(unsigned yy=0;yy<height;yy++){
+        const auto *row=source+(sy+yy*sh/h)*stride;
+        const bool scan=scanlines && (static_cast<unsigned long long>(yy)*sh*2/h)%2;
+        const unsigned brightness=scanlines==1?192:144;
+        for(unsigned xx=0;xx<width;xx++){
+            auto value=row[columns[xx]];
+            if(scan){unsigned r=(value&255)*brightness/256,g=((value>>8)&255)*brightness/256,b=((value>>16)&255)*brightness/256;value=0xff000000|(b<<16)|(g<<8)|r;}
+            if(dim){unsigned r=value&255,g=(value>>8)&255,b=(value>>16)&255;if(r+g+b>160){unsigned grey=(r+g+b)/6;value=0xff000000|(grey<<16)|(grey<<8)|grey;}}
+            put_pixel_unchecked(pixels_,x+xx,y+yy,static_cast<Color>(value));
+        }
+    }
+}
+
 [[noreturn]] void run(Frame frame) noexcept
 {
     if (!verify_unique_ownership())
@@ -538,9 +559,9 @@ void read_asset_bytes(const char *path, std::span<std::uint8_t> destination) noe
     if (result < 0)
         halt("FF1: direct-memory mapping failed");
 
-    Canvas first{static_cast<std::uint32_t *>(mapped)};
+    Canvas first{staging};
     auto *second_frame = static_cast<std::uint8_t *>(mapped) + frame_bytes;
-    Canvas second{reinterpret_cast<std::uint32_t *>(second_frame)};
+    Canvas second{staging};
 
     int user_ids[4]{-1, -1, -1, -1};
     int pad_handle = -1;
@@ -553,8 +574,8 @@ void read_asset_bytes(const char *path, std::span<std::uint8_t> destination) noe
 
     Input input{0, 0, false};
     frame(first, input);
-    frame(second, input);
-    flush_range(mapped, memory_bytes);
+    present_pixels(mapped);
+    present_pixels(second_frame);
 
     std::array<VideoBuffer, 2> buffers{{
         {mapped, nullptr, nullptr, nullptr},
@@ -596,10 +617,12 @@ void read_asset_bytes(const char *path, std::span<std::uint8_t> destination) noe
 
         Canvas &canvas = back_buffer == 0 ? first : second;
         frame(canvas, input);
-        flush_range(mapped, memory_bytes);
+        present_pixels(back_buffer == 0 ? mapped : second_frame);
         (void)sceVideoOutSubmitFlip(video, static_cast<std::int32_t>(back_buffer), 1, 1);
         (void)sceVideoOutWaitVblank(video);
         back_buffer ^= 1;
     }
 }
 } // namespace ps5::demo
+
+

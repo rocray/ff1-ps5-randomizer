@@ -1,37 +1,126 @@
+// FF1 prototype integration. SPDX-License-Identifier: GPL-3.0-or-later
 #include "nes_core.hpp"
-#include "../demo_renderer.hpp"
-#include "libretro_glue.cpp"
+#include "libretro.h"
+#include "../randomizer.hpp"
+#include "../qol.hpp"
+#include <cstdio>
 #include <cstring>
+#include <new>
 
-namespace ps5::demo::nes
-{
-    bool load_rom(NesState &state, std::string_view path)
-    {
-        std::uint8_t *temp = new (std::nothrow) std::uint8_t[512 * 1024];
-        if (!temp) return false;
-
-        read_asset_bytes(path.data(), {temp, 512 * 1024});
-        
-        state.rom = temp;
-        state.rom_size = 512 * 1024;
-        state.loaded = true;
-        state.running = true;
-
-        init_core_glue(&state);
-        return true;
+extern "C" unsigned char ff1_read_cpu(unsigned);
+extern "C" void ff1_heap_reset();
+extern "C" const char *ff1_heap_error();
+extern "C" { int open(const char *, int, ...); long read(int, void *, std::size_t); long lseek(int, long, int); int close(int); }
+namespace ps5::demo::nes {
+static NesState *owner=nullptr; // libretro is a single-instance API
+void save_ram(NesState &s) {
+    if(!s.loaded||!s.save_allowed)return;
+    auto *p=retro_get_memory_data(RETRO_MEMORY_SAVE_RAM);
+    auto n=retro_get_memory_size(RETRO_MEMORY_SAVE_RAM);
+    if(!p || !n)return;
+    char tmp[1024];
+    if(std::snprintf(tmp,sizeof(tmp),"%s.tmp",s.save_path)>=static_cast<int>(sizeof(tmp))){s.error="SAVE PATH TOO LONG";return;}
+    FILE *f=std::fopen(tmp,"wb");
+    if(!f){s.error="SRAM SAVE FAILED";return;}
+    bool ok=std::fwrite(p,1,n,f)==n;
+    if(std::fclose(f)!=0)ok=false;
+    if(!ok || std::rename(tmp,s.save_path)!=0)s.error="SRAM SAVE FAILED";
+    else {if(qol::stamp_save(s.save_path))qol::read_stamp(s.save_path,s.saved_at,sizeof(s.saved_at));else std::snprintf(s.saved_at,sizeof(s.saved_at),"SAVED / CLOCK UNAVAILABLE");}
+}
+void unload_rom(NesState &s) {
+    if(owner==&s){save_run(s);retro_unload_game();retro_deinit();owner=nullptr;}
+    delete[] s.rom;delete[] s.framebuffer;s.rom=nullptr;s.framebuffer=nullptr;
+    s.rom_size=0;s.loaded=s.running=false;
+}
+bool load_rom(NesState &s,std::string_view path) {
+    if(owner && owner!=&s){s.error="CORE ALREADY IN USE";return false;}
+    s.core_message[0]=0;
+    char filename[1024];
+    if(path.size()>=sizeof(filename)){s.error="ROM PATH TOO LONG";return false;}
+    std::memcpy(filename,path.data(),path.size());filename[path.size()]=0;
+    // Use the same low-level file API as the working background asset loader.
+    const int fd=open(filename,0);
+    if(fd<0){s.error="ROM OPEN FAILED";return false;}
+    const long size=lseek(fd,0,SEEK_END);
+    if(size<16 || size>1024*1024){close(fd);s.error="INVALID ROM SIZE / SEEK";return false;}
+    if(lseek(fd,0,SEEK_SET)<0){close(fd);s.error="ROM SEEK FAILED";return false;}
+    // Stage and validate BEFORE destroying a running session. No core sees a
+    // truncated, unsupported or oversized cartridge.
+    static std::uint8_t candidate[1024*1024];
+    bool ok=true;std::size_t offset=0;
+    while(offset<static_cast<std::size_t>(size)){
+        const long n=read(fd,candidate+offset,static_cast<std::size_t>(size)-offset);
+        if(n<=0){ok=false;break;}offset+=static_cast<std::size_t>(n);
     }
-
-    void run_frame(NesState &state, std::uint32_t buttons)
-    {
-        if (!state.running) return;
-        
-        // This will be replaced with actual core_run_frame() 
-        // once the FCEUML .c files are added to src/nes/core/
-        for (int i = 0; i < 256 * 240; ++i) {
-            state.framebuffer[i] = 0xFF0000FF; 
-            if ((i / 240) % 20 == 0 || (i % 240) % 20 == 0) {
-                state.framebuffer[i] = 0xFFFFFFFF;
-            }
+    close(fd);
+    if(!ok||!randomizer::validate_nes(candidate,size)){s.error="INVALID OR UNSUPPORTED NES ROM";return false;}
+    return load_rom_data(s,candidate,static_cast<std::size_t>(size));
+}
+bool load_rom_data(NesState &s,const std::uint8_t *candidate,std::size_t size) {
+    if(owner && owner!=&s){s.error="CORE ALREADY IN USE";return false;}
+    if(!randomizer::validate_nes(candidate,size)){s.error="INVALID OR UNSUPPORTED NES ROM";return false;}
+    if(s.loaded&&s.save_allowed&&s.progress.started&&!save_run(s))return false;
+    unload_rom(s);
+    s.save_allowed=true;s.snapshot_saved=true;
+    s.rom=new(std::nothrow) std::uint8_t[size];
+    s.framebuffer=new(std::nothrow) std::uint32_t[256*240]{};
+    if(!s.rom||!s.framebuffer){unload_rom(s);s.error="ROM BUFFER ALLOCATION FAILED";return false;}
+    std::memcpy(s.rom,candidate,size);
+    FILE *f=nullptr;
+    ff1_heap_reset();s.core_message[0]=0;s.rom_size=static_cast<std::size_t>(size);init_core_glue(&s);retro_init();
+    retro_game_info info{"/app0/resume.nes",s.rom,s.rom_size,nullptr};
+    if(!retro_load_game(&info)){retro_deinit();unload_rom(s);s.error=ff1_heap_error()?ff1_heap_error():(s.core_message[0]?s.core_message:"CORE REJECTED ROM (NO DETAIL)");return false;}
+    owner=&s;s.loaded=s.running=true;s.timer_armed=false;s.frames=0;s.buttons=0;s.error="";
+    tracker_reset(&s.tracker);s.progress={};
+    s.rom_id=14695981039346656037ull;
+    for(std::size_t i=0;i<s.rom_size;i++){s.rom_id^=s.rom[i];s.rom_id*=1099511628211ull;}
+    // Keep existing original-ROM saves; every generated ROM gets isolated SRAM.
+    if(s.save_path==s.save_storage||std::strcmp(s.save_path,"/download0/ff1.srm")==0){
+        if(s.rom_size==randomizer::rom_size&&randomizer::crc32(s.rom+16,s.rom_size-16)==randomizer::base_crc)
+            s.save_path="/download0/ff1.srm";
+        else {std::snprintf(s.save_storage,sizeof(s.save_storage),"/download0/ff1-%016llx.srm",static_cast<unsigned long long>(s.rom_id));s.save_path=s.save_storage;}
+    }
+    qol::read_stamp(s.save_path,s.saved_at,sizeof(s.saved_at));
+    std::snprintf(s.records_path,sizeof(s.records_path),"/download0/ff1-best-%016llx.bin",static_cast<unsigned long long>(s.rom_id));
+    load_records(s.records_path,s.rom_id,s.progress.best);
+    std::memcpy(s.progress.records,s.progress.best,sizeof(s.progress.best));
+    s.records_saved=true;
+    retro_system_av_info av{};retro_get_system_av_info(&av);s.fps=av.timing.fps>1?av.timing.fps:60.0988;
+    auto *ram=retro_get_memory_data(RETRO_MEMORY_SAVE_RAM);auto n=retro_get_memory_size(RETRO_MEMORY_SAVE_RAM);
+    if(ram&&n){f=std::fopen(s.save_path,"rb");if(f){std::fseek(f,0,SEEK_END);long actual=std::ftell(f);std::rewind(f);if(actual==static_cast<long>(n) && std::fread(ram,1,n,f)!=n)s.error="SRAM READ FAILED";std::fclose(f);}}
+    return true;
+}
+void run_frame(NesState &s,std::uint32_t buttons) {
+    if(owner!=&s || !s.loaded || !s.running)return;
+    const bool was_finished=s.progress.finished;
+    s.buttons=buttons;retro_run();++s.frames;
+    auto &r=s.progress;
+    if(!r.started) {
+        unsigned hp=ff1_read_cpu(0x610a)|(ff1_read_cpu(0x610b)<<8);
+        if(overworld_ready(ff1_read_cpu(0x42),ff1_read_cpu(0x4b),hp))++r.stable;else r.stable=0;
+        if(r.stable>=2){
+            r.started=true;s.timer_armed=true;s.tracker.seconds=0;
+            for(int i=0;i<ITEM_COUNT;i++)if(ff1_read_cpu(item_addr[i]))r.practice=true;
+            for(unsigned i=0;i<4;i++)if(ff1_read_cpu(0x6032+i))r.practice=true;
         }
     }
+    if(s.timer_armed && !r.finished){
+        s.tracker.seconds+=1.0/s.fps;
+        std::uint8_t values[ITEM_COUNT];for(int i=0;i<ITEM_COUNT;i++)values[i]=ff1_read_cpu(item_addr[i]);
+        tracker_sample(&s.tracker,values);
+        if(r.started){
+            bool changed=false;
+            for(unsigned i=0;i<3;i++)if(values[16+i])changed|=record_milestone(r,i,s.tracker.seconds);
+            const unsigned addresses[]={0x6035,0x6032,0x6033,0x6034};
+            for(unsigned i=0;i<4;i++){r.orb[i]=ff1_read_cpu(addresses[i])!=0;if(r.orb[i])changed|=record_milestone(r,3+i,s.tracker.seconds);}
+            if(ff1_read_cpu(0x6a)==0x7b && ff1_read_cpu(0x6b86)==0xff){
+                changed|=record_milestone(r,7,s.tracker.seconds);r.finished=true;s.timer_armed=false;
+            }
+            if(changed)s.records_saved=save_records(s.records_path,s.rom_id,r.records);
+        }
+    }
+    if(s.frames%1800==0||(!was_finished&&r.finished))save_run(s);
 }
+}
+
+

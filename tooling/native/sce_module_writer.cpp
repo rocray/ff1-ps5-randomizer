@@ -838,7 +838,13 @@ Bytes write_executable(const Image &image, std::span<const Stub> stubs, const Op
             continue;
         copy_bytes(output, input.file_offset, input.data);
     }
-    const std::uint64_t relro_file = got.file_offset;
+    // .data.rel.ro can precede .got (notably in emulator mapper tables).
+    // Map the beginning of the entire region, not the GOT's file position.
+    require(got.address >= relro_start && got.file_offset >= got.address - relro_start,
+            "invalid GOT/RELRO file mapping");
+    const std::uint64_t relro_file = got.file_offset - (got.address - relro_start);
+    require(relro_file % kPage == relro_start % kPage,
+            "RELRO load segment is not page-congruent");
     copy_bytes(output, relro_file + process_address - relro_start, process_parameters);
     copy_bytes(output, relro_file + blocks_address - relro_start, blocks.data);
     copy_bytes(output, dynamic_file_at(string_address), dynamic_strings);

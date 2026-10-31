@@ -8,6 +8,12 @@
 
 {
     local:
+        calloc;
+        __wrap_*;
+        _ZN13reserved_heap*;
+        ff1_heap_*;
+        sync;
         _Zn*;
         _Zd*;
 };
+

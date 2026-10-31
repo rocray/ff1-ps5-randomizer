@@ -22,6 +22,9 @@ for command in python3 sha256sum; do
     }
 done
 bash "$root/tools/setup-native-dependencies.sh" >/dev/null
+bash "$root/tools/build-fceumm.sh"
+APP_INCLUDE_PATHS="${APP_INCLUDE_PATHS:-} vendor/fceumm/src/drivers/libretro/libretro-common/include"
+APP_STATIC_ARCHIVES="${APP_STATIC_ARCHIVES:-} vendor/fceumm/fceumm-ps5.a"
 
 param="$root/sce_sys/param.json"
 title_id=$(python3 - "$param" <<'PY'
@@ -197,7 +200,7 @@ if (( ${#pacbrew_libs[@]} > 0 )); then
     link_inputs+=(--start-group "${pacbrew_libs[@]}" --end-group)
 fi
 "$sdk_root/bin/prospero-lld" -T "$native/ps5-pie.ld" --eh-frame-hdr \
-    --version-script "$native/app-symbols.map" \
+    --version-script "$native/app-symbols.map" --wrap=free --wrap=realloc \
     -e _start -o "$build/llvm-pie.elf" "${link_inputs[@]}" \
     --as-needed "$sdk_root"/target/lib/*.so
 "$tool" link --in "$build/llvm-pie.elf" --out "$build/eboot.elf" \
@@ -273,3 +276,4 @@ fi
 printf 'Build complete.\nApp folder: %s\n' "$app"
 [[ $format != ffpkg && $format != all ]] || printf 'FFPKG:     %s\n' "$dist/$title_id.ffpkg"
 [[ $format != ffpfsc && $format != all ]] || printf 'FFPFSC:    %s\n' "$dist/$title_id.ffpfsc"
+
